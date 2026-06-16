@@ -13,6 +13,7 @@ on:
       - main
       - master
       - github_actions
+      - rtmb-gaussian
   pull_request:
     branches:
       - main
