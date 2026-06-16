@@ -28,8 +28,13 @@ rtmb_tpl <- function(parameters, data) {
   if (names(family) == "poisson") {
     nll <- nll - sum(RTMB::dpois(yobs[i], mu[i], log=TRUE))
   } else if(names(family) == "gaussian"){
-    sigma <- exp(betadisp)    
-    nll <- nll - sum(RTMB::dnorm(yobs[i], mu[i], sd=sigma, log=TRUE))
+    #dispersion linear predictor (fixed effects only)
+    sparseXdist <- nrow(Xdist)==0 && ncol(Xdist)==0
+    if (sparseXdist) Xdist <- XdistS
+    etadisp <- Xdist %*% betadisp + offsetdisp
+
+    sigma <- exp(etadisp)    
+    nll <- nll - sum(RTMB::dnorm(yobs[i], mu[i], sd=sigma[i], log=TRUE))
   } else {
     stop("not yet implemented")
   }
