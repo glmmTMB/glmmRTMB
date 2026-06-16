@@ -17,6 +17,8 @@ rtmb_tpl <- function(parameters, data) {
   ## Apply link
   if (names(link) == "log") {
     mu <- exp(eta)
+  } else if(names(link) == "identity"){
+    mu <- eta
   } else {
     stop("not yet implemented")
   }
@@ -25,6 +27,9 @@ rtmb_tpl <- function(parameters, data) {
   i <- !is.na(yobs) | inherits(yobs, "simref")
   if (names(family) == "poisson") {
     nll <- nll - sum(RTMB::dpois(yobs[i], mu[i], log=TRUE))
+  } else if(names(family) == "gaussian"){
+    sigma <- exp(betadisp)    
+    nll <- nll - sum(RTMB::dnorm(yobs[i], mu[i], sd=sigma, log=TRUE))
   } else {
     stop("not yet implemented")
   }
