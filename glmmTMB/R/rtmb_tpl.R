@@ -1,5 +1,10 @@
 cmb <- function(f, d) function(p) f(p, d)
 
+logspace_add <- function(a, b) {
+  m <- pmax(a, b)
+  m + log(exp(a - m) + exp(b - m))
+}
+
 rtmb_tpl <- function(parameters, data) {
   RTMB::getAll(data, parameters) ## but R will complain about visible bindings...
   yobs <- RTMB::OBS(yobs)
@@ -23,6 +28,14 @@ rtmb_tpl <- function(parameters, data) {
     stop("not yet implemented")
   }
 
+  ## ZI Linear Predictor
+  has_zi <- length(betazi) > 0
+  if (has_zi) {
+    sparseXzi <- nrow(Xzi)==0 && ncol(Xzi)==0
+    if (sparseXzi) Xzi <- XziS
+    etazi <- Xzi %*% betazi + offsetzi
+  }
+
   ## Data likelihood
   i <- !is.na(yobs) | inherits(yobs, "simref")
   if (names(family) == "poisson") {
@@ -33,8 +46,21 @@ rtmb_tpl <- function(parameters, data) {
     if (sparseXdist) Xdist <- XdistS
     etadisp <- Xdist %*% betadisp + offsetdisp
 
-    sigma <- exp(etadisp)    
-    nll <- nll - sum(RTMB::dnorm(yobs[i], mu[i], sd=sigma[i], log=TRUE))
+    sigma <- exp(etadisp)
+
+    if(!has_zi){
+      nll <- nll - sum(RTMB::dnorm(yobs[i], mu[i], sd=sigma[i], log=TRUE))
+    } else{
+      is_zero <- yobs[i] == 0
+      log_ll_cont <- RTMB::dnorm(yobs[i], mu[i], sd = sigma[i], log = TRUE)
+      #observation is a structural zero
+      log_pz <- -log1p(exp(-etazi[i]))
+      #observation is not a structural zero; drawn from Normal(u,o)
+      log_1mpz <- -log1p(exp( etazi[i]))
+      ll <- ifelse(is_zero, logspace_add(log_pz, log_1mpz + log_ll_cont), log_1mpz + log_ll_cont)      
+      nll <- nll - sum(ll)
+
+    }    
   } else {
     stop("not yet implemented")
   }
