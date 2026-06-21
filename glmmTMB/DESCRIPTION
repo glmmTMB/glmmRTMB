@@ -55,6 +55,7 @@ License: AGPL-3
 Depends: R (>= 3.6.0)
 Imports:
     methods,
+    RTMB,
     TMB (>= 1.9.0),
     lme4 (>= 1.1-18.9000),
     Matrix,
@@ -109,4 +110,4 @@ LazyData: TRUE
 BugReports: https://github.com/glmmTMB/glmmTMB/issues
 NeedsCompilation: yes
 Encoding: UTF-8
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.0.0

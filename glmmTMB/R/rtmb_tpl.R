@@ -87,7 +87,7 @@ termwise_nll <- function(U, theta, term) {
     n <- term$blockSize
     reps <- term$blockReps
     logsd <- head(theta, n)
-    corr_transf <- tail(theta, -n)
+    corr_transf <- theta[-(seq_len(n))]
     sd <- exp(logsd)
     us <- RTMB::unstructured(n)
     C <- us$corr(corr_transf)

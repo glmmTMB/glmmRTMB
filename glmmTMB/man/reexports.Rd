@@ -11,6 +11,6 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{lme4}{\code{\link[lme4]{refit}}}
+  \item{lme4}{\code{\link[lme4:refit]{refit()}}}
 }}
 
