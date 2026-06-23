@@ -13,6 +13,9 @@ rtmb_tpl <- function(parameters, data) {
 
   ## Random effect likelihood (ignoring 'zi', 'disp')
   nll <- nll + allterms_nll(b, theta, terms)
+  
+  if(length(termszi) > 0) nll <- nll + allterms_nll(bzi, thetazi, termszi)
+  if(length(termsdisp) > 0) nll <- nll + allterms_nll(bdisp, thetadisp, termsdisp)
 
   ## Linear predictor (ignoring 'zi', 'disp')
   sparseX <- nrow(X)==0 && ncol(X)==0
@@ -33,7 +36,7 @@ rtmb_tpl <- function(parameters, data) {
   if (has_zi) {
     sparseXzi <- nrow(Xzi)==0 && ncol(Xzi)==0
     if (sparseXzi) Xzi <- XziS
-    etazi <- Xzi %*% betazi + offsetzi
+    etazi <- Xzi %*% betazi + Zzi %*% bzi + zioffset
   }
 
   ## Data likelihood
@@ -41,10 +44,10 @@ rtmb_tpl <- function(parameters, data) {
   if (names(family) == "poisson") {
     nll <- nll - sum(RTMB::dpois(yobs[i], mu[i], log=TRUE))
   } else if(names(family) == "gaussian"){
-    #dispersion linear predictor (fixed effects only)
-    sparseXdist <- nrow(Xdist)==0 && ncol(Xdist)==0
-    if (sparseXdist) Xdist <- XdistS
-    etadisp <- Xdist %*% betadisp + offsetdisp
+    #dispersion linear predictor
+    sparseXdisp <- nrow(Xdisp)==0 && ncol(Xdisp)==0
+    if (sparseXdisp) Xdisp <- XdispS
+    etadisp <- Xdisp %*% betadisp + Zdisp %*% bdisp + dispoffset
 
     sigma <- exp(etadisp)
 
