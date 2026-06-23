@@ -1,9 +1,9 @@
 cmb <- function(f, d) function(p) f(p, d)
 
 logspace_add <- function(a, b) {
-  m <- pmax(a, b)
-  m + log(exp(a - m) + exp(b - m))
+  log(exp(a) + exp(b))
 }
+
 
 rtmb_tpl <- function(parameters, data) {
   yobs_obs <- data$yobs
