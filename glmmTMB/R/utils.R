@@ -4,10 +4,15 @@ useRTMB <- local({
   function(flag = NULL) { useRTMB <<- flag %||% useRTMB ; useRTMB }
 })
 MakeADFun <- function(data, ..., DLL) {
-  if (!useRTMB())
+  if (!useRTMB()) {
     TMB::MakeADFun(data=data, ..., DLL=DLL)
-  else
-    RTMB::MakeADFun(cmb(rtmb_tpl, data), ...)
+  }else {
+    obj <- RTMB::MakeADFun(cmb(rtmb_tpl, data), ...)
+    obj$env$data <- data
+    obj$env$report <- obj$report
+    obj
+    #RTMB::MakeADFun(cmb(rtmb_tpl, data), ...)
+  }
 }
 
 ## backward compat (copied from lme4)
