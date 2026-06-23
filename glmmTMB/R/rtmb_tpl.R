@@ -33,7 +33,8 @@ rtmb_tpl <- function(parameters, data) {
   }
 
   ## ZI Linear Predictor
-  has_zi <- length(betazi) > 0 || length(bzi) > 0
+  #has_zi <- length(betazi) > 0 || length(bzi) > 0
+  has_zi <- length(betazi) > 0
   if (has_zi) {
     sparseXzi <- nrow(Xzi)==0 && ncol(Xzi)==0
     Xzic <- if(sparseXzi) XziS else Xzi
