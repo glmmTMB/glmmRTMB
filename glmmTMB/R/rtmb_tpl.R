@@ -93,6 +93,15 @@ termwise_nll <- function(U, theta, term) {
     C <- us$corr(corr_transf)
     dim(U) <- c(n, reps)
     nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma=C, log=TRUE, scale=sd))
+  } else if(name == "diag"){
+    n <- term$blockSize
+    reps <- term$blockReps
+    logsd <- head(theta, n)
+    sd <- exp(logsd)
+    dim(U) <- c(n, reps)
+    for (k in seq_len(n)) {
+      nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
+    }
   } else {
     stop("not yet implemented")
   }
