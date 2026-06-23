@@ -17,6 +17,8 @@
 #                family=poisson, data=Salamanders)
 # logLik(m1)
 
+
+
 ##SLEEP STUDY DATASET
 
 context("RTMB Gaussian backend")
@@ -252,4 +254,320 @@ test_that("gaussian: simulate() works under RTMB backend", {
   expect_true(is.list(sim))
   expect_equal(length(sim$yobs), nrow(sleepstudy))
   expect_true(all(is.finite(sim$yobs)))
+})
+
+
+
+
+
+
+## Salamander Dataset
+
+data("Salamanders", package = "glmmTMB")
+Salamanders$lcount <- log1p(Salamanders$count)  ## continuous response for gaussian
+
+test_that("gaussian (Salamanders): fixed effects with binary factor predictor", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined, family = gaussian, data = Salamanders,
+                     se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined, family = gaussian, data = Salamanders,
+                    se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(unname(fixef(m_rtmb)$cond), unname(fixef(m_tmb)$cond),
+               tolerance = 1e-6)
+})
+
+test_that("gaussian (Salamanders): fixed effects with multi-level factor predictor", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined + spp, family = gaussian,
+                     data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined + spp, family = gaussian,
+                    data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(unname(fixef(m_rtmb)$cond), unname(fixef(m_tmb)$cond),
+               tolerance = 1e-6)
+})
+
+test_that("gaussian (Salamanders): single random intercept by site", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined + (1 | site), family = gaussian,
+                     data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined + (1 | site), family = gaussian,
+                    data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+  expect_equal(as.numeric(VarCorr(m_rtmb)$cond$site),
+               as.numeric(VarCorr(m_tmb)$cond$site),
+               tolerance = 1e-4)
+})
+
+test_that("gaussian (Salamanders): crossed random intercepts (site + spp)", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined + (1 | site) + (1 | spp),
+                     family = gaussian, data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined + (1 | site) + (1 | spp),
+                    family = gaussian, data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+})
+
+test_that("gaussian (Salamanders): nested random slope by site", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined + (mined | site), family = gaussian,
+                     data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined + (mined | site), family = gaussian,
+                    data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+})
+
+test_that("gaussian (Salamanders): dispersion varying by mined status", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined, dispformula = ~ mined,
+                     family = gaussian, data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined, dispformula = ~ mined,
+                    family = gaussian, data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(unname(fixef(m_rtmb)$disp), unname(fixef(m_tmb)$disp),
+               tolerance = 1e-6)
+})
+
+test_that("gaussian (Salamanders): zero-inflation with factor predictor (hurdle)", {
+  ## lcount already has structural zeros from count == 0 observations,
+  ## so no artificial zero injection needed here
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined, ziformula = ~ mined,
+                     family = gaussian, data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined, ziformula = ~ mined,
+                    family = gaussian, data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+  expect_equal(unname(fixef(m_rtmb)$zi), unname(fixef(m_tmb)$zi),
+               tolerance = 1e-5)
+})
+
+test_that("gaussian (Salamanders): zero-inflation with random intercept by site", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined, ziformula = ~ 1 + (1 | site),
+                     family = gaussian, data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined, ziformula = ~ 1 + (1 | site),
+                    family = gaussian, data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+})
+
+test_that("gaussian (Salamanders): weighted observations", {
+  set.seed(201)
+  Salamanders$w <- runif(nrow(Salamanders), 0.5, 2)
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined, family = gaussian, data = Salamanders,
+                     weights = w, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(lcount ~ mined, family = gaussian, data = Salamanders,
+                    weights = w, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+})
+
+test_that("gaussian (Salamanders): simulate() works under RTMB backend", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(lcount ~ mined + (1 | site), family = gaussian,
+                     data = Salamanders, se = FALSE)
+  sim <- m_rtmb$obj$simulate(complete = TRUE)
+
+  expect_true(is.list(sim))
+  expect_equal(length(sim$yobs), nrow(Salamanders))
+  expect_true(all(is.finite(sim$yobs)))
+})
+
+
+
+
+
+
+
+## ChickWeight Dataset
+
+data("ChickWeight", package = "datasets")
+chick_dat <- transform(ChickWeight,
+                       Chick = factor(Chick),
+                       Diet = factor(Diet))
+chick_dat$off <- 0.05 * chick_dat$Time
+chick_dat$w <- rep(c(1, 1.5), length.out = nrow(chick_dat))
+chick_dat$grp2 <- factor(as.integer(chick_dat$Chick) %% 6)
+
+test_that("gaussian ChickWeight: fixed conditional effects", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet, family = gaussian,
+                    data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet, family = gaussian,
+                   data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+})
+
+test_that("gaussian ChickWeight: fixed effects with offset", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet + offset(off), family = gaussian,
+                    data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet + offset(off), family = gaussian,
+                   data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+})
+
+test_that("gaussian ChickWeight: weighted observations", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet, family = gaussian,
+                    data = chick_dat, weights = w, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet, family = gaussian,
+                   data = chick_dat, weights = w, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+})
+
+test_that("gaussian ChickWeight: fixed dispersion formula", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet, dispformula = ~ Time,
+                    family = gaussian, data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet, dispformula = ~ Time,
+                   family = gaussian, data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(fixef(m_rtmb)$disp, fixef(m_tmb)$disp, tolerance = 1e-6)
+})
+
+test_that("gaussian ChickWeight: conditional random intercept", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet + (1 | Chick),
+                    family = gaussian, data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet + (1 | Chick),
+                   family = gaussian, data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+})
+
+test_that("gaussian ChickWeight: conditional random slope", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet + (Time | Chick),
+                    family = gaussian, data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet + (Time | Chick),
+                   family = gaussian, data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+})
+
+test_that("gaussian ChickWeight: diag covariance random effects", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet + diag(Time | Chick),
+                    family = gaussian, data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet + diag(Time | Chick),
+                   family = gaussian, data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+})
+
+test_that("gaussian ChickWeight: multiple random-effect terms", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet + (1 | Chick) + (1 | grp2),
+                    family = gaussian, data = chick_dat, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet + (1 | Chick) + (1 | grp2),
+                   family = gaussian, data = chick_dat, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+})
+
+test_that("gaussian ChickWeight: fixed ZI formula with induced zeros", {
+  chick_zi <- chick_dat
+  set.seed(201)
+  chick_zi$weight[sample(nrow(chick_zi), 10)] <- 0
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet, ziformula = ~ Time,
+                    family = gaussian, data = chick_zi, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet, ziformula = ~ Time,
+                   family = gaussian, data = chick_zi, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-6)
+  expect_equal(fixef(m_rtmb)$zi, fixef(m_tmb)$zi, tolerance = 1e-6)
+})
+
+test_that("gaussian ChickWeight: ZI random effects with induced zeros", {
+  chick_zi <- chick_dat
+  set.seed(202)
+  chick_zi$weight[sample(nrow(chick_zi), 10)] <- 0
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(weight ~ Time + Diet, ziformula = ~ 1 + (1 | Chick),
+                    family = gaussian, data = chick_zi, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(weight ~ Time + Diet, ziformula = ~ 1 + (1 | Chick),
+                   family = gaussian, data = chick_zi, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = 1e-5)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
 })
