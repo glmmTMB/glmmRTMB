@@ -89,9 +89,9 @@ vv <- VarCorr(fmPix1)
 
 set.seed(12345)
 dd <- data.frame(a=gl(10,100), b = rnorm(1000))
-test2 <- suppressMessages(simulate(~1+(b|a), newdata=dd, family=poisson,
+test2 <- simulate_new(~1+(b|a), newdata=dd, family=poisson,
                   newparams= list(beta = c("(Intercept)" = 1),
-                                  theta = c(1,1,1))))
+                                  theta = c(0,0,0)))
 
 ## Zero-inflation : set all i.0 indices to 0:
 i.0 <- sample(c(FALSE,TRUE), 1000, prob=c(.3,.7), replace=TRUE)
