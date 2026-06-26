@@ -30,6 +30,10 @@ data("sleepstudy", package = "lme4")
 old_use_rtmb <- glmmTMB:::useRTMB()
 withr::defer(glmmTMB:::useRTMB(old_use_rtmb), testthat::teardown_env())
 
+tol_logLik <- 1e-5
+tol_fixef <- 1e-5
+tol_varcorr <- 1e-4
+
 test_that("gaussian: fixed conditional effects only", {
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days, family = gaussian, data = sleepstudy,
@@ -40,9 +44,9 @@ test_that("gaussian: fixed conditional effects only", {
                     se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
+               tolerance = tol_logLik)
   expect_equal(unname(fixef(m_rtmb)$cond), unname(fixef(m_tmb)$cond),
-               tolerance = 1e-6)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian: fixed effects with offset", {
@@ -57,7 +61,7 @@ test_that("gaussian: fixed effects with offset", {
                     data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian: weighted observations (runif weights)", {
@@ -73,7 +77,7 @@ test_that("gaussian: weighted observations (runif weights)", {
                     weights = w, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian: weighted fixed effects (alternating weights)", {
@@ -88,8 +92,8 @@ test_that("gaussian: weighted fixed effects (alternating weights)", {
                     weights = w, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
 })
 
 test_that("gaussian: fixed dispersion formula", {
@@ -102,10 +106,10 @@ test_that("gaussian: fixed dispersion formula", {
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
   expect_equal(unname(fixef(m_rtmb)$disp), unname(fixef(m_tmb)$disp),
-               tolerance = 1e-6)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian: random effects in dispersion formula", {
@@ -118,9 +122,9 @@ test_that("gaussian: random effects in dispersion formula", {
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
-  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
 
 test_that("gaussian: fixed ZI formula (hurdle, introduced zeros)", {
@@ -136,9 +140,9 @@ test_that("gaussian: fixed ZI formula (hurdle, introduced zeros)", {
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
   expect_equal(unname(fixef(m_rtmb)$zi), unname(fixef(m_tmb)$zi),
-               tolerance = 1e-5)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian: zero-inflation fixed effects match TMB backend (no induced zeros)", {
@@ -151,9 +155,9 @@ test_that("gaussian: zero-inflation fixed effects match TMB backend (no induced 
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$zi, fixef(m_tmb)$zi, tolerance = 1e-5)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(fixef(m_rtmb)$zi, fixef(m_tmb)$zi, tolerance = tol_fixef)
 })
 
 test_that("gaussian: random-only ZI formula (~0 + RE, induced zeros)", {
@@ -169,7 +173,7 @@ test_that("gaussian: random-only ZI formula (~0 + RE, induced zeros)", {
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian: ZI intercept + random effects match TMB backend (no induced zeros)", {
@@ -182,9 +186,9 @@ test_that("gaussian: ZI intercept + random effects match TMB backend (no induced
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
-  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
 
 test_that("gaussian: single random intercept (cond RE)", {
@@ -197,10 +201,10 @@ test_that("gaussian: single random intercept (cond RE)", {
                     data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
   expect_equal(as.numeric(VarCorr(m_rtmb)$cond$Subject),
                as.numeric(VarCorr(m_tmb)$cond$Subject),
-               tolerance = 1e-4)
+               tolerance = tol_varcorr)
 })
 
 test_that("gaussian: correlated random slope (us covstruct)", {
@@ -213,7 +217,7 @@ test_that("gaussian: correlated random slope (us covstruct)", {
                     data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian: multiple random-effect terms", {
@@ -229,7 +233,7 @@ test_that("gaussian: multiple random-effect terms", {
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian: diag covstruct random effects", {
@@ -242,7 +246,7 @@ test_that("gaussian: diag covstruct random effects", {
                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian: simulate() works under RTMB backend", {
@@ -276,9 +280,9 @@ test_that("gaussian (Salamanders): fixed effects with binary factor predictor", 
                     se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
+               tolerance = tol_logLik)
   expect_equal(unname(fixef(m_rtmb)$cond), unname(fixef(m_tmb)$cond),
-               tolerance = 1e-6)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian (Salamanders): fixed effects with multi-level factor predictor", {
@@ -291,9 +295,9 @@ test_that("gaussian (Salamanders): fixed effects with multi-level factor predict
                     data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
+               tolerance = tol_logLik)
   expect_equal(unname(fixef(m_rtmb)$cond), unname(fixef(m_tmb)$cond),
-               tolerance = 1e-6)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian (Salamanders): single random intercept by site", {
@@ -306,10 +310,10 @@ test_that("gaussian (Salamanders): single random intercept by site", {
                     data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
   expect_equal(as.numeric(VarCorr(m_rtmb)$cond$site),
                as.numeric(VarCorr(m_tmb)$cond$site),
-               tolerance = 1e-4)
+               tolerance = tol_varcorr)
 })
 
 test_that("gaussian (Salamanders): crossed random intercepts (site + spp)", {
@@ -322,7 +326,7 @@ test_that("gaussian (Salamanders): crossed random intercepts (site + spp)", {
                     family = gaussian, data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian (Salamanders): nested random slope by site", {
@@ -335,7 +339,7 @@ test_that("gaussian (Salamanders): nested random slope by site", {
                     data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian (Salamanders): dispersion varying by mined status", {
@@ -348,9 +352,9 @@ test_that("gaussian (Salamanders): dispersion varying by mined status", {
                     family = gaussian, data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
+               tolerance = tol_logLik)
   expect_equal(unname(fixef(m_rtmb)$disp), unname(fixef(m_tmb)$disp),
-               tolerance = 1e-6)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian (Salamanders): zero-inflation with factor predictor (hurdle)", {
@@ -365,9 +369,9 @@ test_that("gaussian (Salamanders): zero-inflation with factor predictor (hurdle)
                     family = gaussian, data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
   expect_equal(unname(fixef(m_rtmb)$zi), unname(fixef(m_tmb)$zi),
-               tolerance = 1e-5)
+               tolerance = tol_fixef)
 })
 
 test_that("gaussian (Salamanders): zero-inflation with random intercept by site", {
@@ -380,8 +384,8 @@ test_that("gaussian (Salamanders): zero-inflation with random intercept by site"
                     family = gaussian, data = Salamanders, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
 })
 
 test_that("gaussian (Salamanders): weighted observations", {
@@ -397,7 +401,7 @@ test_that("gaussian (Salamanders): weighted observations", {
                     weights = w, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian (Salamanders): simulate() works under RTMB backend", {
@@ -437,8 +441,8 @@ test_that("gaussian ChickWeight: fixed conditional effects", {
                    data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
 })
 
 test_that("gaussian ChickWeight: fixed effects with offset", {
@@ -451,7 +455,7 @@ test_that("gaussian ChickWeight: fixed effects with offset", {
                    data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian ChickWeight: weighted observations", {
@@ -464,8 +468,8 @@ test_that("gaussian ChickWeight: weighted observations", {
                    data = chick_dat, weights = w, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
 })
 
 test_that("gaussian ChickWeight: fixed dispersion formula", {
@@ -478,8 +482,8 @@ test_that("gaussian ChickWeight: fixed dispersion formula", {
                    family = gaussian, data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$disp, fixef(m_tmb)$disp, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$disp, fixef(m_tmb)$disp, tolerance = tol_fixef)
 })
 
 test_that("gaussian ChickWeight: conditional random intercept", {
@@ -492,8 +496,8 @@ test_that("gaussian ChickWeight: conditional random intercept", {
                    family = gaussian, data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+               tolerance = tol_logLik)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
 
 test_that("gaussian ChickWeight: conditional random slope", {
@@ -506,8 +510,8 @@ test_that("gaussian ChickWeight: conditional random slope", {
                    family = gaussian, data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
-  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+               tolerance = tol_logLik)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
 
 test_that("gaussian ChickWeight: diag covariance random effects", {
@@ -520,7 +524,7 @@ test_that("gaussian ChickWeight: diag covariance random effects", {
                    family = gaussian, data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian ChickWeight: multiple random-effect terms", {
@@ -533,7 +537,7 @@ test_that("gaussian ChickWeight: multiple random-effect terms", {
                    family = gaussian, data = chick_dat, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
+               tolerance = tol_logLik)
 })
 
 test_that("gaussian ChickWeight: fixed ZI formula with induced zeros", {
@@ -550,8 +554,8 @@ test_that("gaussian ChickWeight: fixed ZI formula with induced zeros", {
                    family = gaussian, data = chick_zi, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-6)
-  expect_equal(fixef(m_rtmb)$zi, fixef(m_tmb)$zi, tolerance = 1e-6)
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$zi, fixef(m_tmb)$zi, tolerance = tol_fixef)
 })
 
 test_that("gaussian ChickWeight: ZI random effects with induced zeros", {
@@ -568,6 +572,177 @@ test_that("gaussian ChickWeight: ZI random effects with induced zeros", {
                    family = gaussian, data = chick_zi, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
-               tolerance = 1e-5)
-  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = 1e-4)
+               tolerance = tol_logLik)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+
+
+
+
+## Existing Gaussian test coverage ported to RTMB/TMB comparisons
+
+test_that("gaussian existing basics: intercept-only random effect", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ 1 + (1 | Subject), data = sleepstudy,
+                    se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ 1 + (1 | Subject), data = sleepstudy,
+                   se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing basics: split random intercept and slope", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ Days + (1 | Subject) + (0 + Days | Subject),
+                    data = sleepstudy, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ Days + (1 | Subject) + (0 + Days | Subject),
+                   data = sleepstudy, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing basics: double-bar random effects", {
+  data("sleepstudy", package = "lme4")
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ 1 + (Days || Subject), data = sleepstudy,
+                    se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ 1 + (Days || Subject), data = sleepstudy,
+                   se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing basics: bar/double-bar bug model", {
+  set.seed(1)
+  n <- 100
+  xdata <- data.frame(
+    rfac1 = as.factor(sample(letters[1:10], n, replace = TRUE)),
+    rfac2 = as.factor(sample(letters[1:10], n, replace = TRUE)),
+    cov = rnorm(n),
+    rv = rpois(n, lambda = 2)
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(rv ~ cov + (1 + cov || rfac1) + (1 | rfac2),
+                    family = gaussian, data = xdata, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(rv ~ cov + (1 + cov || rfac1) + (1 | rfac2),
+                   family = gaussian, data = xdata, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing Anova case: fixed dispersion indicator", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ Days + (1 | Subject),
+                    dispformula = ~ I(Days > 5), data = sleepstudy,
+                    REML = FALSE, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ Days + (1 | Subject),
+                   dispformula = ~ I(Days > 5), data = sleepstudy,
+                   REML = FALSE, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(fixef(m_rtmb)$disp, fixef(m_tmb)$disp, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing methods: Salamanders dispersion by cover", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(count ~ cover, family = gaussian,
+                    dispformula = ~ cover, data = Salamanders, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(count ~ cover, family = gaussian,
+                   dispformula = ~ cover, data = Salamanders, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(fixef(m_rtmb)$disp, fixef(m_tmb)$disp, tolerance = tol_fixef)
+})
+
+test_that("gaussian existing methods: mtcars random dispersion effect", {
+  mtcars$cyl <- factor(mtcars$cyl)
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(mpg ~ wt, dispformula = ~ 1 + (1 | cyl),
+                    data = mtcars, family = gaussian, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(mpg ~ wt, dispformula = ~ 1 + (1 | cyl),
+                   data = mtcars, family = gaussian, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing varstruc: homdiag random effects", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ Days + homdiag(Days | Subject),
+                    data = sleepstudy, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ Days + homdiag(Days | Subject),
+                   data = sleepstudy, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+})
+
+test_that("gaussian existing predict: polynomial fixed effects", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ poly(Days, 3), data = sleepstudy,
+                    se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ poly(Days, 3), data = sleepstudy,
+                   se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+})
+
+test_that("gaussian existing predict: polynomial with random intercept", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(Reaction ~ (1 | Subject) + poly(Days, 3),
+                    data = sleepstudy, se = FALSE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(Reaction ~ (1 | Subject) + poly(Days, 3),
+                   data = sleepstudy, se = FALSE)
+
+  expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
+               tolerance = tol_logLik)
+  expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
