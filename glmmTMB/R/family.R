@@ -21,7 +21,10 @@ utils::globalVariables(c(
     ".Theta", ".Phi",
     "b", "theta", "XS", "Z", "offset", "link",
     "betazi", "XziS", "offsetzi",
-    "XdistS", "betadisp", "offsetdisp"
+    "XdistS", "betadisp", "offsetdisp",
+    "X", "Xzi", "Zzi", "zioffset", "bzi", "thetazi", "termszi",
+    "Xdisp", "XdispS", "Zdisp", "dispoffset", "bdisp", "thetadisp",
+    "termsdisp"
 ))
 
 ## see whether calling function has been called from glm.fit ...
@@ -517,4 +520,3 @@ bell <- function(link="log") {
     ##              )
     return(make_family(r, link, needs_nonneg = TRUE, needs_int = TRUE))
 }
-

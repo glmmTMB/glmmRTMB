@@ -28,7 +28,7 @@ skip_if_not_installed("RTMB")
 data("sleepstudy", package = "lme4")
 
 old_use_rtmb <- glmmTMB:::useRTMB()
-withr::defer(glmmTMB:::useRTMB(old_use_rtmb), testthat::teardown_env())
+testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5

@@ -56,7 +56,12 @@ rtmb_tpl <- function(parameters, data) {
       if (names(family) == "poisson") {
         tmp_loglik <- RTMB::dpois(yobs[j], mu[j], log=TRUE)
       } else if(names(family) == "gaussian"){
-        tmp_loglik <- RTMB::dnorm(yobs[j], mu[j], sd=sigma[j], log=TRUE)
+        if (inherits(yobs, "simref")) {
+          tmp_loglik <- RTMB::dnorm(yobs[j], mu[j], sd=sigma[j], log=TRUE)
+        } else {
+          z <- (yobs[j] - mu[j]) / sigma[j]
+          tmp_loglik <- -(log(sigma[j]) + 0.5 * log(2 * pi) + 0.5 * z * z)
+        }
       } else {
         stop("not yet implemented")
       }
