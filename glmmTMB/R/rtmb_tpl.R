@@ -1,10 +1,5 @@
 cmb <- function(f, d) function(p) f(p, d)
 
-logspace_add <- function(a, b) {
-  log(exp(a) + exp(b))
-}
-
-
 rtmb_tpl <- function(parameters, data) {
   yobs_obs <- data$yobs
   RTMB::getAll(data, parameters) ##but R will complain about visible bindings...
@@ -68,11 +63,11 @@ rtmb_tpl <- function(parameters, data) {
 
       if(has_zi){
         #observation is a structural zero
-        log_pz <- -logspace_add(0, -etazi[j])
+        log_pz <- -RTMB::logspace_add(0, -etazi[j])
         #observation is not a structural zero; drawn from Normal(u,o)
-        log_1mpz <- -logspace_add(0, etazi[j])
+        log_1mpz <- -RTMB::logspace_add(0, etazi[j])
         if(yobs_obs[j] == 0) {
-          tmp_loglik <- logspace_add(log_pz, log_1mpz + tmp_loglik)
+          tmp_loglik <- RTMB::logspace_add(log_pz, log_1mpz + tmp_loglik)
         } else {
           tmp_loglik <- log_1mpz + tmp_loglik
         }
