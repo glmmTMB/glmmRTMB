@@ -7,7 +7,7 @@ logspace_add <- function(a, b) {
 
 rtmb_tpl <- function(parameters, data) {
   yobs_obs <- data$yobs
-  RTMB::getAll(data, parameters) ## but R will complain about visible bindings...
+  RTMB::getAll(data, parameters) ##but R will complain about visible bindings...
   yobs <- RTMB::OBS(yobs)
 
   nll <- 0
@@ -17,9 +17,9 @@ rtmb_tpl <- function(parameters, data) {
   zi_re <- allterms_nll(bzi, thetazi, termszi)
   disp_re <- allterms_nll(bdisp, thetadisp, termsdisp)
   nll <- nll + cond_re$nll + zi_re$nll + disp_re$nll
-  
+
   ## Linear predictor (ignoring 'zi', 'disp')
-  sparseX <- nrow(X)==0 && ncol(X)==0
+  sparseX <- nrow(X) == 0 && ncol(X) == 0
   Xc <- if (sparseX) XS else X
   eta <- Xc %*% beta + Z %*% b + offset
 
@@ -33,11 +33,11 @@ rtmb_tpl <- function(parameters, data) {
   }
 
   ## ZI Linear Predictor
-  #has_zi <- length(betazi) > 0 || length(bzi) > 0
+  # has_zi <- length(betazi) > 0 || length(bzi) > 0
   has_zi <- length(betazi) > 0
   if (has_zi) {
-    sparseXzi <- nrow(Xzi)==0 && ncol(Xzi)==0
-    Xzic <- if(sparseXzi) XziS else Xzi
+    sparseXzi <- nrow(Xzi) == 0 && ncol(Xzi) == 0
+    Xzic <- if (sparseXzi) XziS else Xzi
     etazi <- Xzic %*% betazi + Zzi %*% bzi + zioffset
   }
 
@@ -148,6 +148,7 @@ allterms_nll <- function(u, theta, terms) {
 }
 
 termwise_nll <- function(U, theta, term) {
+  "[<-" <- RTMB::ADoverload("[<-")
   nll <- 0
   name <- names(term$blockCode)
   if (name == "us") {
@@ -162,7 +163,7 @@ termwise_nll <- function(U, theta, term) {
     dim(U) <- c(n, reps)
     nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma=C, log=TRUE, scale=sd))
     return(list(nll = nll, corr = C, sd = sd))
-  } else if(name == "diag"){
+  } else if (name == "diag") {
     n <- term$blockSize
     reps <- term$blockReps
     logsd <- head(theta, n)
@@ -172,7 +173,7 @@ termwise_nll <- function(U, theta, term) {
       nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
     }
     return(list(nll = nll, corr = matrix(numeric(0), 0, 0), sd = sd))
-  } else if(name == "homdiag"){
+  } else if (name == "homdiag") {
     n <- term$blockSize
     reps <- term$blockReps
     sd <- rep(exp(theta[1]), n)
@@ -181,6 +182,54 @@ termwise_nll <- function(U, theta, term) {
       nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
     }
     return(list(nll = nll, corr = matrix(numeric(0), 0, 0), sd = sd))
+  } else if (name == "cs" || name == "homcs") {
+    # compound symmetry
+    n <- term$blockSize
+    reps <- term$blockReps
+    if (name == "cs") {
+      logsd <- theta[seq_len(n)]
+      corr_transf <- theta[n + 1L]
+    } else {
+      logsd <- rep(theta[1], n)
+      corr_transf <- theta[2]
+    }
+
+    sd <- exp(logsd)
+    a <- 1 / (n-1)
+    rho <- (1 / (1 + exp(-corr_transf))) * (1 + a) - a
+    C <- diag(n)
+    C[row(C) != col(C)] <- rho
+
+    dim(U) <- c(n, reps)
+    nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = sd))
+    return(list(nll = nll, corr = C, sd = sd))
+
+  } else if (name == "toep" || name == "homtoep") {
+    # toeplitz correlation
+    n <- term$blockSize
+    reps <- term$blockReps
+    if (name == "toep") {
+      logsd <- theta[seq_len(n)]
+      corr_raw <- theta[-seq_len(n)]
+    } else {
+      logsd <- rep(theta[1], n)
+      corr_raw <- theta[-1]
+    }
+
+    sd <- exp(logsd)
+    corr_params <- corr_raw / sqrt(1 + corr_raw^2)
+    C <- matrix(0, n, n)
+    for (i in seq_len(n)) {
+      for (j in seq_len(n)) {
+        C[i, j] <- if (i == j) 1 else corr_params[abs(i - j)]
+      }
+    }
+
+    dim(U) <- c(n, reps)
+    nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = sd))
+
+    return(list(nll = nll, corr = C, sd = sd))
+
   } else {
     stop("not yet implemented")
   }

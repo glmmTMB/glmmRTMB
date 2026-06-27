@@ -746,3 +746,158 @@ test_that("gaussian existing predict: polynomial with random intercept", {
   expect_equal(fixef(m_rtmb)$cond, fixef(m_tmb)$cond, tolerance = tol_fixef)
   expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
+
+
+## Testing covariance structure options
+
+test_that("gaussian: heterogeneous compound-symmetry covariance", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days + cs(Days | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days + cs(Days | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: homogeneous compound-symmetry covariance", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days + homcs(Days | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days + homcs(Days | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: heterogeneous Toeplitz covariance", {
+  toep_data <- sleepstudy
+  toep_data$Reaction <- ifelse(toep_data$Reaction > 250, 1, 0)
+  toep_data$Days <- cut(
+    toep_data$Days,
+    breaks = c(0, 3, 6, 10),
+    right = FALSE
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ toep(0 + Days | Subject),
+    family = gaussian,
+    data = toep_data,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ toep(0 + Days | Subject),
+    family = gaussian,
+    data = toep_data,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: homogeneous Toeplitz covariance", {
+  toep_data <- sleepstudy
+  toep_data$Reaction <- ifelse(toep_data$Reaction > 250, 1, 0)
+  toep_data$Days <- cut(
+    toep_data$Days,
+    breaks = c(0, 3, 6, 10),
+    right = FALSE
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ homtoep(0 + Days | Subject),
+    family = gaussian,
+    data = toep_data,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ homtoep(0 + Days | Subject),
+    family = gaussian,
+    data = toep_data,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
