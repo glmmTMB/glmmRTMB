@@ -1,24 +1,26 @@
 cmb <- function(f, d) function(p) f(p, d)
 
 rtmb_tpl <- function(parameters, data) {
+  ## Keep the original response for NA and structural-zero checks; OBS() may
+  ## replace yobs with a simulation reference
   yobs_obs <- data$yobs
   RTMB::getAll(data, parameters) ##but R will complain about visible bindings...
   yobs <- RTMB::OBS(yobs)
 
   nll <- 0
 
-  ## Random effect likelihood
+  ## Random-effects contribution; translated from glmmTMB.cpp:900-903
   cond_re <- allterms_nll(b, theta, terms)
   zi_re <- allterms_nll(bzi, thetazi, termszi)
   disp_re <- allterms_nll(bdisp, thetadisp, termsdisp)
   nll <- nll + cond_re$nll + zi_re$nll + disp_re$nll
 
-  ## Linear predictor (ignoring 'zi', 'disp')
+  ## Conditional linear predictor and inverse link; adapted from
+  ## glmmTMB.cpp:833, 911-918, and 934-937
   sparseX <- nrow(X) == 0 && ncol(X) == 0
   Xc <- if (sparseX) XS else X
   eta <- Xc %*% beta + Z %*% b + offset
 
-  ## Apply link
   if (names(link) == "log") {
     mu <- exp(eta)
   } else if(names(link) == "identity"){
@@ -27,7 +29,8 @@ rtmb_tpl <- function(parameters, data) {
     stop("not yet implemented")
   }
 
-  ## ZI Linear Predictor
+  ## Zero-inflation linear predictor; adapted from
+  ## glmmTMB.cpp:836, 880, and 919-925
   # has_zi <- length(betazi) > 0 || length(bzi) > 0
   has_zi <- length(betazi) > 0
   if (has_zi) {
@@ -36,7 +39,8 @@ rtmb_tpl <- function(parameters, data) {
     etazi <- Xzic %*% betazi + Zzi %*% bzi + zioffset
   }
 
-  ## Dispersion Linear Predictor
+  ## Dispersion linear predictor; adapted from
+  ## glmmTMB.cpp:839, 926-932, and 939
   if (names(family) == "gaussian") {
     sparseXdisp <- nrow(Xdisp) == 0 && ncol(Xdisp) == 0
     Xdispc <- if (sparseXdisp) XdispS else Xdisp
@@ -45,7 +49,8 @@ rtmb_tpl <- function(parameters, data) {
     sigma <- exp(etadisp)
   }
 
-  ## Data likelihood
+  ## Gaussian and Poisson observation likelihoods; adapted from
+  ## glmmTMB.cpp:961-967, 975-978, and 1196-1199
   for(j in seq_along(yobs)){
     if(!is.na(yobs_obs[j]) || inherits(yobs, "simref")){
       if (names(family) == "poisson") {
@@ -62,9 +67,11 @@ rtmb_tpl <- function(parameters, data) {
       }
 
       if(has_zi){
-        #observation is a structural zero
+        ## Compute log(p_zero) and log(1 - p_zero) directly from the logit-scale
+        ## predictor then combine the structural-zero and conditional components
+        ## Adapted from glmmTMB.cpp:1180-1193
+
         log_pz <- -RTMB::logspace_add(0, -etazi[j])
-        #observation is not a structural zero; drawn from Normal(u,o)
         log_1mpz <- -RTMB::logspace_add(0, etazi[j])
         if(yobs_obs[j] == 0) {
           tmp_loglik <- RTMB::logspace_add(log_pz, log_1mpz + tmp_loglik)
@@ -94,7 +101,8 @@ rtmb_tpl <- function(parameters, data) {
 
   nll
 }
-
+## Partition the concatenated random effects and covariance parameters by term
+## Term slicing is translated from allterms_nll() in glmmTMB.cpp:803-826
 allterms_nll <- function(u, theta, terms) {
   nll <- 0
   corr <- vector("list", length(terms))
@@ -113,6 +121,7 @@ allterms_nll <- function(u, theta, terms) {
   for (i in seq_along(terms)) {
     term <- terms[[i]]
     nr <- term$blockSize * term$blockReps
+    ## A zero-length theta block reuses the prev term's covariance parameters
     emptyTheta <- term$blockNumTheta == 0
 
     if (!emptyTheta) {
@@ -142,12 +151,16 @@ allterms_nll <- function(u, theta, terms) {
   list(nll = nll, corr = corr, sd = sd)
 }
 
+## Evaluate one random-effects term under its covariance structure
+## Partial translation of termwise_nll() in glmmTMB.cpp:353-800
 termwise_nll <- function(U, theta, term) {
+  ## Preserve automatic differentiation when filling matrices by assignment
   "[<-" <- RTMB::ADoverload("[<-")
   nll <- 0
   name <- names(term$blockCode)
   if (name == "us") {
-    ## Direct translation of glmmTMB.cpp:407-440
+    ## Unstructured covariance; translated from
+    ## glmmTMB.cpp:407-416 and 436-440
     n <- term$blockSize
     reps <- term$blockReps
     logsd <- head(theta, n)
@@ -159,6 +172,8 @@ termwise_nll <- function(U, theta, term) {
     nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma=C, log=TRUE, scale=sd))
     return(list(nll = nll, corr = C, sd = sd))
   } else if (name == "diag") {
+    ## Heterogeneous diagonal covariance; translated from
+    ## glmmTMB.cpp:358-362 and 382
     n <- term$blockSize
     reps <- term$blockReps
     logsd <- head(theta, n)
@@ -169,6 +184,8 @@ termwise_nll <- function(U, theta, term) {
     }
     return(list(nll = nll, corr = matrix(numeric(0), 0, 0), sd = sd))
   } else if (name == "homdiag") {
+    ## Homogeneous diagonal covariance; translated from
+    ## glmmTMB.cpp:384-389 and 398-405
     n <- term$blockSize
     reps <- term$blockReps
     sd <- rep(exp(theta[1]), n)
@@ -178,7 +195,8 @@ termwise_nll <- function(U, theta, term) {
     }
     return(list(nll = nll, corr = matrix(numeric(0), 0, 0), sd = sd))
   } else if (name == "cs" || name == "homcs") {
-    # compound symmetry
+    ## Compound-symmetry covariance; translated from
+    ## glmmTMB.cpp:441-463 and 471-473
     n <- term$blockSize
     reps <- term$blockReps
     if (name == "cs") {
@@ -200,7 +218,8 @@ termwise_nll <- function(U, theta, term) {
     return(list(nll = nll, corr = C, sd = sd))
 
   } else if (name == "toep" || name == "homtoep") {
-    # toeplitz correlation
+    ## Toeplitz covariance; translated from
+    ## glmmTMB.cpp:474-496 and 504-506
     n <- term$blockSize
     reps <- term$blockReps
     if (name == "toep") {
