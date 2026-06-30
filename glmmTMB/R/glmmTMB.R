@@ -1160,6 +1160,7 @@ binomialType <- function(x) {
 ##' @importFrom stats gaussian binomial poisson nlminb as.formula terms model.weights
 ##' @importFrom reformulas subbars mkReTrms
 ##' @importFrom Matrix t
+##' @importFrom RTMB REPORT
 ##' @importFrom TMB MakeADFun sdreport
 ##' @details
 ##' \itemize{

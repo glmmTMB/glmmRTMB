@@ -12,20 +12,8 @@ family_factory <- function(default_link, family, variance) {
 }
 
 ## suppress code warnings for nbinom1/nbinom2; can't use .Theta <- NULL trick here ...
-# utils::globalVariables(".Theta")
-# utils::globalVariables(".Phi")
-
-## also suppresses warnings for variables injected into scope by RTMB::getAll()
-## in rtmb_tpl() (see R/rtmb_tpl.R)
-utils::globalVariables(c(
-    ".Theta", ".Phi",
-    "b", "theta", "XS", "Z", "offset", "link",
-    "betazi", "XziS", "offsetzi",
-    "XdistS", "betadisp", "offsetdisp",
-    "X", "Xzi", "Zzi", "zioffset", "bzi", "thetazi", "termszi",
-    "Xdisp", "XdispS", "Zdisp", "dispoffset", "bdisp", "thetadisp",
-    "termsdisp"
-))
+utils::globalVariables(".Theta")
+utils::globalVariables(".Phi")
 
 ## see whether calling function has been called from glm.fit ...
 in_glm_fit <- function() {

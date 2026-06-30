@@ -1,10 +1,20 @@
 cmb <- function(f, d) function(p) f(p, d)
 
+## Variables injected into rtmb_tpl() by RTMB::getAll()
+utils::globalVariables(c(
+  "X", "XS", "Z", "offset", "terms", "family", "link", "weights",
+  "beta", "b", "theta",
+  "Xzi", "XziS", "Zzi", "zioffset", "termszi",
+  "betazi", "bzi", "thetazi",
+  "Xdisp", "XdispS", "Zdisp", "dispoffset", "termsdisp",
+  "betadisp", "bdisp", "thetadisp"
+))
+
 rtmb_tpl <- function(parameters, data) {
   ## Keep the original response for NA and structural-zero checks; OBS() may
   ## replace yobs with a simulation reference
   yobs_obs <- data$yobs
-  RTMB::getAll(data, parameters) ##but R will complain about visible bindings...
+  RTMB::getAll(data, parameters)
   yobs <- RTMB::OBS(yobs)
 
   nll <- 0
@@ -41,13 +51,10 @@ rtmb_tpl <- function(parameters, data) {
 
   ## Dispersion linear predictor; adapted from
   ## glmmTMB.cpp:839, 926-932, and 939
-  if (names(family) == "gaussian") {
-    sparseXdisp <- nrow(Xdisp) == 0 && ncol(Xdisp) == 0
-    Xdispc <- if (sparseXdisp) XdispS else Xdisp
-    etadisp <- Xdispc %*% betadisp + Zdisp %*% bdisp + dispoffset
-
-    sigma <- exp(etadisp)
-  }
+  sparseXdisp <- nrow(Xdisp) == 0 && ncol(Xdisp) == 0
+  Xdispc <- if (sparseXdisp) XdispS else Xdisp
+  etadisp <- Xdispc %*% betadisp + Zdisp %*% bdisp + dispoffset
+  phi <- exp(etadisp)
 
   ## Gaussian and Poisson observation likelihoods; adapted from
   ## glmmTMB.cpp:961-967, 975-978, and 1196-1199
@@ -57,10 +64,10 @@ rtmb_tpl <- function(parameters, data) {
         tmp_loglik <- RTMB::dpois(yobs[j], mu[j], log=TRUE)
       } else if(names(family) == "gaussian"){
         if (inherits(yobs, "simref")) {
-          tmp_loglik <- RTMB::dnorm(yobs[j], mu[j], sd=sigma[j], log=TRUE)
+          tmp_loglik <- RTMB::dnorm(yobs[j], mu[j], sd=phi[j], log=TRUE)
         } else {
-          z <- (yobs[j] - mu[j]) / sigma[j]
-          tmp_loglik <- -(log(sigma[j]) + 0.5 * log(2 * pi) + 0.5 * z * z)
+          z <- (yobs[j] - mu[j]) / phi[j]
+          tmp_loglik <- -(log(phi[j]) + 0.5 * log(2 * pi) + 0.5 * z * z)
         }
       } else {
         stop("not yet implemented")
@@ -89,15 +96,15 @@ rtmb_tpl <- function(parameters, data) {
   corrdisp <- disp_re$corr
   sddisp <- disp_re$sd
 
-  RTMB::REPORT(corr)
-  RTMB::REPORT(sd)
-  RTMB::REPORT(corrzi)
-  RTMB::REPORT(sdzi)
-  RTMB::REPORT(corrdisp)
-  RTMB::REPORT(sddisp)
-  RTMB::REPORT(b)
-  RTMB::REPORT(bzi)
-  RTMB::REPORT(bdisp)
+  REPORT(corr)
+  REPORT(sd)
+  REPORT(corrzi)
+  REPORT(sdzi)
+  REPORT(corrdisp)
+  REPORT(sddisp)
+  REPORT(b)
+  REPORT(bzi)
+  REPORT(bdisp)
 
   nll
 }
@@ -152,99 +159,99 @@ allterms_nll <- function(u, theta, terms) {
 }
 
 ## Evaluate one random-effects term under its covariance structure
-## Partial translation of termwise_nll() in glmmTMB.cpp:353-800
+## Translation of the currently supported cases in
+## termwise_nll(), glmmTMB.cpp:358-506
 termwise_nll <- function(U, theta, term) {
-  ## Preserve automatic differentiation when filling matrices by assignment
+  ## Preserve automatic differentiation when filling correlation matrices
   "[<-" <- RTMB::ADoverload("[<-")
-  nll <- 0
+
   name <- names(term$blockCode)
-  if (name == "us") {
-    ## Unstructured covariance; translated from
-    ## glmmTMB.cpp:407-416 and 436-440
-    n <- term$blockSize
-    reps <- term$blockReps
-    logsd <- head(theta, n)
-    corr_transf <- theta[-(seq_len(n))]
-    sd <- exp(logsd)
-    us <- RTMB::unstructured(n)
-    C <- us$corr(corr_transf)
-    dim(U) <- c(n, reps)
-    nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma=C, log=TRUE, scale=sd))
-    return(list(nll = nll, corr = C, sd = sd))
-  } else if (name == "diag") {
-    ## Heterogeneous diagonal covariance; translated from
-    ## glmmTMB.cpp:358-362 and 382
-    n <- term$blockSize
-    reps <- term$blockReps
-    logsd <- head(theta, n)
-    sd <- exp(logsd)
-    dim(U) <- c(n, reps)
-    for (k in seq_len(n)) {
-      nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
-    }
-    return(list(nll = nll, corr = matrix(numeric(0), 0, 0), sd = sd))
-  } else if (name == "homdiag") {
-    ## Homogeneous diagonal covariance; translated from
-    ## glmmTMB.cpp:384-389 and 398-405
-    n <- term$blockSize
-    reps <- term$blockReps
-    sd <- rep(exp(theta[1]), n)
-    dim(U) <- c(n, reps)
-    for (k in seq_len(n)) {
-      nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
-    }
-    return(list(nll = nll, corr = matrix(numeric(0), 0, 0), sd = sd))
-  } else if (name == "cs" || name == "homcs") {
-    ## Compound-symmetry covariance; translated from
-    ## glmmTMB.cpp:441-463 and 471-473
-    n <- term$blockSize
-    reps <- term$blockReps
-    if (name == "cs") {
-      logsd <- theta[seq_len(n)]
-      corr_transf <- theta[n + 1L]
-    } else {
-      logsd <- rep(theta[1], n)
-      corr_transf <- theta[2]
-    }
+  supported <- c("diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep")
 
-    sd <- exp(logsd)
-    a <- 1 / (n-1)
-    rho <- (1 / (1 + exp(-corr_transf))) * (1 + a) - a
-    C <- diag(n)
-    C[row(C) != col(C)] <- rho
-
-    dim(U) <- c(n, reps)
-    nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = sd))
-    return(list(nll = nll, corr = C, sd = sd))
-
-  } else if (name == "toep" || name == "homtoep") {
-    ## Toeplitz covariance; translated from
-    ## glmmTMB.cpp:474-496 and 504-506
-    n <- term$blockSize
-    reps <- term$blockReps
-    if (name == "toep") {
-      logsd <- theta[seq_len(n)]
-      corr_raw <- theta[-seq_len(n)]
-    } else {
-      logsd <- rep(theta[1], n)
-      corr_raw <- theta[-1]
-    }
-
-    sd <- exp(logsd)
-    corr_params <- corr_raw / sqrt(1 + corr_raw^2)
-    C <- matrix(0, n, n)
-    for (i in seq_len(n)) {
-      for (j in seq_len(n)) {
-        C[i, j] <- if (i == j) 1 else corr_params[abs(i - j)]
-      }
-    }
-
-    dim(U) <- c(n, reps)
-    nll <- nll - sum(RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = sd))
-
-    return(list(nll = nll, corr = C, sd = sd))
-
-  } else {
-    stop("not yet implemented")
+  if (!name %in% supported) {
+    stop("covariance structure not yet implemented: ", name)
   }
+
+  n <- term$blockSize
+  reps <- term$blockReps
+  dim(U) <- c(n, reps)
+
+  ## Homogeneous structures use one standard-deviation parameter;
+  ## heterogeneous structures use one parameter per term component.
+  hetvar <- !grepl("^hom", name)
+  n_sd_par <- if (hetvar) n else 1L
+
+  logsd <- if (hetvar) {
+    head(theta, n)
+  } else {
+    rep(theta[1L], n)
+  }
+
+  sd <- exp(logsd)
+  corr_par <- theta[-seq_len(n_sd_par)]
+
+  ## Remove the "hom" prefix because homogeneous and heterogeneous
+  ## variants differ only in their standard-deviation parameterization.
+  cov_structure <- sub("^hom", "", name)
+
+  C <- switch(
+    cov_structure,
+
+    ## Diagonal covariance; glmmTMB.cpp:358-405
+    diag = {
+      matrix(numeric(0), 0, 0)
+    },
+
+    ## Unstructured covariance; glmmTMB.cpp:407-440
+    us = {
+      RTMB::unstructured(n)$corr(corr_par)
+    },
+
+    ## Compound-symmetry covariance; glmmTMB.cpp:441-473
+    cs = {
+      a <- 1 / (n - 1)
+      rho <- (1 / (1 + exp(-corr_par[1L]))) * (1 + a) - a
+
+      corr <- diag(n)
+      corr[row(corr) != col(corr)] <- rho
+      corr
+    },
+
+    ## Toeplitz covariance; glmmTMB.cpp:474-506
+    toep = {
+      corr_params <- corr_par / sqrt(1 + corr_par^2)
+      corr <- matrix(0, n, n)
+
+      for (i in seq_len(n)) {
+        for (j in seq_len(n)) {
+          corr[i, j] <- if (i == j) {
+            1
+          } else {
+            corr_params[abs(i - j)]
+          }
+        }
+      }
+
+      corr
+    },
+
+    stop("covariance structure not yet implemented: ", name)
+  )
+
+  ## Diagonal structures factor into univariate normal densities;
+  ## correlated structures use a scaled multivariate normal density.
+  if (cov_structure == "diag") {
+    nll <- 0
+
+    for (k in seq_len(n)) {
+      nll <- nll -
+        sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
+    }
+  } else {
+    nll <- -sum(
+      RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = sd)
+    )
+  }
+
+  list(nll = nll, corr = C, sd = sd)
 }
