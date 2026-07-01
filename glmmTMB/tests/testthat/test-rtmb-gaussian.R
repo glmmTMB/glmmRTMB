@@ -977,3 +977,104 @@ test_that("gaussian: fixed equal-to covariance", {
     tolerance = tol_varcorr
   )
 })
+
+test_that("RTMB uses TMB's unstructured theta ordering in dimension four", {
+  L <- matrix(
+    c(
+      1.0, 0.0, 0.0, 0.0,
+      0.2, 1.0, 0.0, 0.0,
+      0.3, 0.4, 1.0, 0.0,
+      0.5, 0.6, 0.7, 1.0
+    ),
+    nrow = 4,
+    byrow = TRUE
+  )
+  scale <- diag(c(0.5, 1.0, 1.5, 2.0))
+  Sigma <- scale %*% tcrossprod(L) %*% scale
+  theta <- glmmTMB:::as.theta.vcov(Sigma)
+
+  equalto_term <- list(
+    blockSize = 4,
+    blockReps = 1,
+    blockNumTheta = 10,
+    blockCode = structure(15, names = "equalto"),
+    fullCor = 1
+  )
+  equalto_result <- glmmTMB:::termwise_nll(
+    numeric(4), theta, equalto_term
+  )
+
+  expect_equal(equalto_result$corr, cov2cor(Sigma), tolerance = 1e-12)
+  expect_equal(equalto_result$sd, sqrt(diag(Sigma)), tolerance = 1e-12)
+
+  loglambda <- log(2.5)
+  propto_term <- equalto_term
+  propto_term$blockNumTheta <- 11
+  propto_term$blockCode <- structure(11, names = "propto")
+  propto_result <- glmmTMB:::termwise_nll(
+    numeric(4), c(theta, loglambda), propto_term
+  )
+  propto_cov <- propto_result$corr *
+    tcrossprod(propto_result$sd)
+
+  expect_equal(propto_cov, exp(loglambda) * Sigma, tolerance = 1e-12)
+})
+
+test_that("RTMB covariance reports respect full_cor = FALSE", {
+  make_term <- function(name, block_size, block_num_theta) {
+    list(
+      blockSize = block_size,
+      blockReps = 1,
+      blockNumTheta = block_num_theta,
+      blockCode = structure(
+        unname(glmmTMB:::.valid_covstruct[[name]]),
+        names = name
+      ),
+      fullCor = 0
+    )
+  }
+
+  cases <- list(
+    us = list(n = 2, theta = c(0, 0, 0.2)),
+    cs = list(n = 2, theta = c(0, 0, 0.2)),
+    homcs = list(n = 2, theta = c(0, 0.2)),
+    toep = list(n = 3, theta = c(0, 0, 0, 0.2, 0.1)),
+    homtoep = list(n = 3, theta = c(0, 0.2, 0.1)),
+    propto = list(n = 2, theta = c(0, 0, 0.2, 0))
+  )
+
+  for (name in names(cases)) {
+    case <- cases[[name]]
+    term <- make_term(name, case$n, length(case$theta))
+    result <- glmmTMB:::termwise_nll(
+      numeric(case$n), case$theta, term
+    )
+
+    expect_identical(
+      result$corr,
+      matrix(NaN, 1, 1),
+      info = name
+    )
+  }
+
+  ## The C++ equalto implementation always reports its fixed correlation
+  ## matrix, even when full_cor is false.
+  equalto_term <- make_term("equalto", 2, 3)
+  equalto_result <- glmmTMB:::termwise_nll(
+    numeric(2), c(0, 0, 0.2), equalto_term
+  )
+  expect_equal(dim(equalto_result$corr), c(2, 2))
+})
+
+test_that("RTMB full_cor = FALSE reporting works through MakeADFun", {
+  glmmTMB:::useRTMB(TRUE)
+  fit <- glmmTMB(
+    Reaction ~ Days + (Days | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE,
+    control = glmmTMBControl(full_cor = FALSE)
+  )
+
+  expect_identical(fit$obj$report()$corr[[1]], matrix(NaN, 1, 1))
+})

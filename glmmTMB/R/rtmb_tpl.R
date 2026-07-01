@@ -158,6 +158,39 @@ allterms_nll <- function(u, theta, terms) {
   list(nll = nll, corr = corr, sd = sd)
 }
 
+## Construct the correlation matrix used by TMB's
+## density::UNSTRUCTURED_CORR_t. TMB fills the lower triangle row-wise,
+## whereas matrix lower-triangle assignment in R fills it column-wise
+## leading to a different theta ordering for dim >= 4
+tmb_unstructured_corr <- function(n, theta) {
+  "[<-" <- RTMB::ADoverload("[<-")
+
+  expected <- n * (n - 1L) / 2L
+  if (length(theta) != expected) {
+    stop("Expected ", expected, " correlation parameters")
+  }
+
+  L <- diag(n)
+  k <- 1L
+  for (i in seq_len(n)) {
+    for (j in seq_len(n)) {
+      if (i > j) {
+        L[i, j] <- theta[k]
+        k <- k + 1L
+      }
+    }
+  }
+
+  llt <- L %*% t(L)
+  corr <- llt
+  for (i in seq_len(n)) {
+    for (j in seq_len(n)) {
+      corr[i, j] <- llt[i, j] / sqrt(llt[i, i] * llt[j, j])
+    }
+  }
+  corr
+}
+
 ## Evaluate one random-effects term under its covariance structure
 ## Translation of the currently supported cases in
 ## termwise_nll(), glmmTMB.cpp:358-506
@@ -222,7 +255,7 @@ termwise_nll <- function(U, theta, term) {
 
     ## Unstructured covariance; glmmTMB.cpp:407-440
     us = {
-      RTMB::unstructured(n)$corr(corr_par)
+      tmb_unstructured_corr(n, corr_par)
     },
 
     ## Compound-symmetry covariance; glmmTMB.cpp:441-473
@@ -266,10 +299,24 @@ termwise_nll <- function(U, theta, term) {
         sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
     }
   } else {
+    ## Keep scale dimensions identical to t(U). A bare vector is ambiguous to
+    ## RTMB::dmvnorm when there is exactly one block repetition.
+    scale_matrix <- rep(sd, reps)
+    dim(scale_matrix) <- c(n, reps)
+    scale_matrix <- t(scale_matrix)
     nll <- -sum(
-      RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = sd)
+      RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = scale_matrix)
     )
   }
 
-  list(nll = nll, corr = C, sd = sd)
+  ## Match C++ full-correlation reporting; equalto always reports its matrix.
+  report_corr <- C
+  conditional_full_cor <- c(
+    "us", "cs", "homcs", "toep", "homtoep", "propto"
+  )
+  if (name %in% conditional_full_cor && term$fullCor == 0) {
+    report_corr <- matrix(NaN, 1L, 1L)
+  }
+
+  list(nll = nll, corr = report_corr, sd = sd)
 }
