@@ -901,3 +901,79 @@ test_that("gaussian: homogeneous Toeplitz covariance", {
     tolerance = tol_varcorr
   )
 })
+
+test_that("gaussian: proportional covariance", {
+  matrix_names <- c("(Intercept)", "Days")
+  proportional_matrix <- diag(2)
+  dimnames(proportional_matrix) <- list(matrix_names, matrix_names)
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days + propto(Days | Subject, proportional_matrix),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days + propto(Days | Subject, proportional_matrix),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: fixed equal-to covariance", {
+  matrix_names <- c("(Intercept)", "Days")
+  fixed_covariance <- matrix(c(900, 5, 5, 25), 2, 2)
+  dimnames(fixed_covariance) <- list(matrix_names, matrix_names)
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days + equalto(Days | Subject, fixed_covariance),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days + equalto(Days | Subject, fixed_covariance),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})

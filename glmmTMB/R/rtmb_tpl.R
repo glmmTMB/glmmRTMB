@@ -166,7 +166,10 @@ termwise_nll <- function(U, theta, term) {
   "[<-" <- RTMB::ADoverload("[<-")
 
   name <- names(term$blockCode)
-  supported <- c("diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep")
+  supported <- c(
+    "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
+    "propto", "equalto"
+  )
 
   if (!name %in% supported) {
     stop("covariance structure not yet implemented: ", name)
@@ -190,12 +193,27 @@ termwise_nll <- function(U, theta, term) {
   sd <- exp(logsd)
   corr_par <- theta[-seq_len(n_sd_par)]
 
+  ## propto uses an unstructured correlation matrix with an additional
+  ## parameter that proportionally scales the covariance matrix.
+  if (name == "propto") {
+    loglambda <- tail(corr_par, 1L)
+    corr_par <- head(corr_par, -1L)
+    sd <- exp(logsd + loglambda / 2)
+  }
+
   ## Remove the "hom" prefix because homogeneous and heterogeneous
   ## variants differ only in their standard-deviation parameterization.
   cov_structure <- sub("^hom", "", name)
 
+  ## propto and equalto use the unstructured correlation parameterization.
+  density_structure <- if (cov_structure %in% c("propto", "equalto")) {
+    "us"
+  } else {
+    cov_structure
+  }
+
   C <- switch(
-    cov_structure,
+    density_structure,
 
     ## Diagonal covariance; glmmTMB.cpp:358-405
     diag = {
@@ -240,7 +258,7 @@ termwise_nll <- function(U, theta, term) {
 
   ## Diagonal structures factor into univariate normal densities;
   ## correlated structures use a scaled multivariate normal density.
-  if (cov_structure == "diag") {
+  if (density_structure == "diag") {
     nll <- 0
 
     for (k in seq_len(n)) {
