@@ -246,7 +246,7 @@ tmb_unstructured_corr <- function(n, theta) {
 
 ## Evaluate one random-effects term under its covariance structure
 ## Translation of the currently supported cases in
-## termwise_nll(), glmmTMB.cpp:358-590
+## termwise_nll(), glmmTMB.cpp:358-650
 termwise_nll <- function(U, theta, term) {
   ## Preserve automatic differentiation when filling correlation matrices
   "[<-" <- RTMB::ADoverload("[<-")
@@ -254,7 +254,7 @@ termwise_nll <- function(U, theta, term) {
   name <- names(term$blockCode)
   supported <- c(
     "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
-    "ar1", "hetar1", "propto", "equalto"
+    "ar1", "hetar1", "ou", "propto", "equalto"
   )
 
   if (!name %in% supported) {
@@ -267,7 +267,7 @@ termwise_nll <- function(U, theta, term) {
 
   ## Homogeneous structures use one standard-deviation parameter;
   ## heterogeneous structures use one parameter per term component.
-  homogeneous <- c("homdiag", "homcs", "homtoep", "ar1")
+  homogeneous <- c("homdiag", "homcs", "homtoep", "ar1", "ou")
   hetvar <- !name %in% homogeneous
   n_sd_par <- if (hetvar) n else 1L
 
@@ -318,7 +318,6 @@ termwise_nll <- function(U, theta, term) {
     cs = {
       a <- 1 / (n - 1)
       rho <- (1 / (1 + exp(-corr_par[1L]))) * (1 + a) - a
-
       corr <- diag(n)
       corr[row(corr) != col(corr)] <- rho
       corr
@@ -328,7 +327,6 @@ termwise_nll <- function(U, theta, term) {
     toep = {
       corr_params <- corr_par / sqrt(1 + corr_par^2)
       corr <- matrix(0, n, n)
-
       for (i in seq_len(n)) {
         for (j in seq_len(n)) {
           corr[i, j] <- if (i == j) {
@@ -354,6 +352,23 @@ termwise_nll <- function(U, theta, term) {
       corr
     },
 
+    ## OU covariance; glmmTMB.cpp:593-650
+    ou = {
+      times <- term$times
+      if (length(times) != n) {
+        stop("OU time vector length must equal block size")
+      }
+      decay <- exp(corr_par[1L])
+      corr <- matrix(0, n, n)
+      for (i in seq_len(n)) {
+        for (j in seq_len(n)) {
+          corr[i, j] <- exp(
+            -decay * abs(times[i] - times[j])
+          )
+        }
+      }
+      corr
+    },
     stop("covariance structure not yet implemented: ", name)
   )
 
@@ -363,8 +378,7 @@ termwise_nll <- function(U, theta, term) {
     nll <- 0
 
     for (k in seq_len(n)) {
-      nll <- nll -
-        sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
+      nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
     }
   } else {
     ## Keep scale dimensions identical to t(U). A bare vector is ambiguous to
@@ -372,8 +386,7 @@ termwise_nll <- function(U, theta, term) {
     scale_matrix <- rep(sd, reps)
     dim(scale_matrix) <- c(n, reps)
     scale_matrix <- t(scale_matrix)
-    nll <- -sum(
-      RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = scale_matrix)
+    nll <- -sum(RTMB::dmvnorm(t(U), Sigma = C, log = TRUE, scale = scale_matrix)
     )
   }
 
@@ -381,6 +394,9 @@ termwise_nll <- function(U, theta, term) {
   report_corr <- C
   if (name %in% c("ar1", "hetar1") && term$fullCor == 0) {
     report_corr <- matrix(phi, 1L, 1L)
+  }
+  if (name == "ou" && term$fullCor == 0) {
+    report_corr <- matrix(decay, 1L, 1L)
   }
 
   conditional_full_cor <- c(
@@ -390,6 +406,10 @@ termwise_nll <- function(U, theta, term) {
     report_corr <- matrix(NaN, 1L, 1L)
   }
 
-  report_sd <- if (name == "ar1") sd[1L] else sd
+  report_sd <- if (name == "ar1" || (name == "ou" && term$fullCor == 0)) {
+    sd[1L]
+  } else {
+    sd
+  }
   list(nll = nll, corr = report_corr, sd = report_sd)
 }

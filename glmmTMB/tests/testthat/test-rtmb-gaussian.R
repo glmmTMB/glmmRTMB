@@ -459,6 +459,159 @@ test_that("gaussian: hetar1 works in zero-inflation model", {
   )
 })
 
+test_that("gaussian: Ornstein-Uhlenbeck covariance", {
+  set.seed(601)
+
+  ng <- 40L
+  times <- c(0, 0.5, 2, 5)
+  nt <- length(times)
+  decay <- 0.7
+  process_sd <- 1.2
+  correlation <- exp(
+    -decay * abs(outer(times, times, "-"))
+  )
+  Sigma <- process_sd^2 * correlation
+  random_effects <- MASS::mvrnorm(ng, rep(0, nt), Sigma)
+
+  ou_dat <- data.frame(
+    group = factor(rep(seq_len(ng), each = nt)),
+    time = glmmTMB::numFactor(rep(times, times = ng)),
+    time_num = rep(times, times = ng)
+  )
+  ou_dat$y <- 1 + 0.2 * ou_dat$time_num +
+    as.vector(t(random_effects))
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    y ~ time_num + ou(0 + time | group),
+    family = gaussian,
+    dispformula = ~ 0,
+    data = ou_dat,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    y ~ time_num + ou(0 + time | group),
+    family = gaussian,
+    dispformula = ~ 0,
+    data = ou_dat,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: OU matrix follows continuous time distances", {
+  set.seed(602)
+
+  times <- c(0, 0.5, 2, 5)
+  ng <- 20L
+  process_sd <- 1.2
+  decay <- 0.7
+  theta <- c(log(process_sd), log(decay))
+  ou_dat <- data.frame(
+    group = factor(rep(seq_len(ng), each = length(times))),
+    time = glmmTMB::numFactor(rep(times, times = ng)),
+    y = rnorm(ng * length(times))
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  model <- glmmTMB(
+    y ~ ou(0 + time | group),
+    family = gaussian,
+    data = ou_dat,
+    start = list(theta = theta),
+    map = list(theta = factor(c(NA, NA))),
+    se = FALSE
+  )
+
+  vc <- VarCorr(model)$cond$group
+  reported_sd <- attr(vc, "stddev")
+  correlation <- attr(vc, "correlation")
+  expected_corr <- exp(
+    -decay * abs(outer(times, times, "-"))
+  )
+  dimnames(expected_corr) <- dimnames(correlation)
+
+  expect_equal(
+    unname(reported_sd),
+    rep(process_sd, length(times)),
+    tolerance = tol_varcorr
+  )
+  expect_equal(
+    correlation,
+    expected_corr,
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: OU works in zero-inflation model", {
+  ou_dat <- transform(
+    sleepstudy,
+    DaysNum = glmmTMB::numFactor(Days)
+  )
+  set.seed(603)
+  ou_dat$Reaction[sample(nrow(ou_dat), 20)] <- 0
+
+  process_sd <- 0.5
+  decay <- 0.7
+  thetazi <- c(log(process_sd), log(decay))
+  theta_map <- factor(c(NA, NA))
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1 + ou(0 + DaysNum | Subject),
+    family = gaussian,
+    data = ou_dat,
+    start = list(thetazi = thetazi),
+    map = list(thetazi = theta_map),
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1 + ou(0 + DaysNum | Subject),
+    family = gaussian,
+    data = ou_dat,
+    start = list(thetazi = thetazi),
+    map = list(thetazi = theta_map),
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$zi,
+    fixef(m_tmb)$zi,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
 test_that("gaussian: single random intercept (cond RE)", {
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days + (1 | Subject), family = gaussian,
