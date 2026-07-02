@@ -54,14 +54,23 @@ dZI <- function(density) {
 }
 
 ## matches tmb's dnorm() arithmetic ordering
-dnorm_tmb <- function(x, mean = 0, sd = 1, log = FALSE) {
-  if (inherits(x, "simref")) {
-    return(RTMB::dnorm(x, mean, sd, log))
+dnorm_tmb <- local({
+  log_density <- RTMB::Vectorize(
+    function(x, mean, sd) {
+      z <- (x - mean) / sd
+      -log(sqrt(2 * pi)) - log(sd) - 0.5 * z * z
+    },
+    vectorize.args = c("x", "mean", "sd")
+  )
+
+  function(x, mean = 0, sd = 1, log = FALSE) {
+    if (inherits(x, "simref")) {
+      return(RTMB::dnorm(x, mean, sd, log))
+    }
+    ans <- log_density(x, mean, sd)
+    if (log) ans else exp(ans)
   }
-  z <- (x - mean) / sd
-  ans <- -log(sqrt(2 * pi)) - log(sd) - 0.5 * z * z
-  if (log) ans else exp(ans)
-}
+})
 
 ## Variables injected into rtmb_tpl() by RTMB::getAll()
 utils::globalVariables(c(
@@ -274,7 +283,7 @@ termwise_nll <- function(U, theta, term) {
   ## propto uses an unstructured correlation matrix with an additional
   ## parameter that proportionally scales the covariance matrix.
   if (name == "propto") {
-    loglambda <- tail(corr_par, 1L)
+    loglambda <- utils::tail(corr_par, 1L)
     corr_par <- head(corr_par, -1L)
     sd <- exp(logsd + loglambda / 2)
   }
