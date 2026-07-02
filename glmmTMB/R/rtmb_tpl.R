@@ -245,7 +245,7 @@ termwise_nll <- function(U, theta, term) {
   name <- names(term$blockCode)
   supported <- c(
     "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
-    "ar1", "propto", "equalto"
+    "ar1", "hetar1", "propto", "equalto"
   )
 
   if (!name %in% supported) {
@@ -286,6 +286,8 @@ termwise_nll <- function(U, theta, term) {
   ## propto and equalto use the unstructured correlation parameterization.
   density_structure <- if (cov_structure %in% c("propto", "equalto")) {
     "us"
+  } else if (cov_structure == "hetar1") {
+    "ar1"
   } else {
     cov_structure
   }
@@ -368,7 +370,7 @@ termwise_nll <- function(U, theta, term) {
 
   ## Match C++ full-correlation reporting; equalto always reports its matrix.
   report_corr <- C
-  if (name == "ar1" && term$fullCor == 0) {
+  if (name %in% c("ar1", "hetar1") && term$fullCor == 0) {
     report_corr <- matrix(phi, 1L, 1L)
   }
 

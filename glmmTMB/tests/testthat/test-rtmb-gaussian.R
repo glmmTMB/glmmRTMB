@@ -317,6 +317,148 @@ test_that("gaussian: AR1 works in zero-inflation model", {
   )
 })
 
+test_that("gaussian: heterogeneous AR1 covariance", {
+  set.seed(501)
+
+  ng <- 60L
+  nt <- 3L
+  rho <- 0.45
+  component_sd <- c(0.7, 1.1, 1.6)
+  correlation <- rho^abs(
+    outer(seq_len(nt), seq_len(nt), "-")
+  )
+  Sigma <- outer(component_sd, component_sd) * correlation
+  random_effects <- MASS::mvrnorm(ng, rep(0, nt), Sigma)
+
+  hetar1_dat <- data.frame(
+    group = factor(rep(seq_len(ng), each = nt)),
+    time = factor(rep(seq_len(nt), times = ng)),
+    time_num = rep(seq_len(nt) - 1, times = ng)
+  )
+  hetar1_dat$y <- 2 + 0.35 * hetar1_dat$time_num +
+    as.vector(t(random_effects)) +
+    rnorm(nrow(hetar1_dat), sd = 0.4)
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    y ~ time_num + hetar1(0 + time | group),
+    family = gaussian,
+    data = hetar1_dat,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    y ~ time_num + hetar1(0 + time | group),
+    family = gaussian,
+    data = hetar1_dat,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: hetar1 reports component-specific SDs", {
+  ar1_dat <- transform(sleepstudy, DaysFac = factor(Days))
+  component_sd <- seq(0.5, 1.4, length.out = nlevels(ar1_dat$DaysFac))
+  rho <- 0.4
+  theta <- c(
+    log(component_sd),
+    rho / sqrt(1 - rho^2)
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  model <- glmmTMB(
+    Reaction ~ Days + hetar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    start = list(theta = theta),
+    map = list(theta = factor(rep(NA, length(theta)))),
+    se = FALSE
+  )
+
+  vc <- VarCorr(model)$cond$Subject
+  correlation <- attr(vc, "correlation")
+  reported_sd <- attr(vc, "stddev")
+  expected_corr <- rho^abs(
+    outer(
+      seq_len(nrow(correlation)),
+      seq_len(ncol(correlation)),
+      "-"
+    )
+  )
+  dimnames(expected_corr) <- dimnames(correlation)
+
+  expect_equal(unname(reported_sd), component_sd, tolerance = tol_varcorr)
+  expect_equal(correlation, expected_corr, tolerance = tol_varcorr)
+})
+
+test_that("gaussian: hetar1 works in zero-inflation model", {
+  ar1_dat <- transform(sleepstudy, DaysFac = factor(Days))
+  set.seed(502)
+  ar1_dat$Reaction[sample(nrow(ar1_dat), 20)] <- 0
+
+  component_sd <- rep(0.5, nlevels(ar1_dat$DaysFac))
+  rho <- 0.4
+  thetazi <- c(
+    log(component_sd),
+    rho / sqrt(1 - rho^2)
+  )
+  theta_map <- factor(rep(NA, length(thetazi)))
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1 + hetar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    start = list(thetazi = thetazi),
+    map = list(thetazi = theta_map),
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1 + hetar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    start = list(thetazi = thetazi),
+    map = list(thetazi = theta_map),
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$zi,
+    fixef(m_tmb)$zi,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
 test_that("gaussian: single random intercept (cond RE)", {
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days + (1 | Subject), family = gaussian,
