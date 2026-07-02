@@ -237,7 +237,7 @@ tmb_unstructured_corr <- function(n, theta) {
 
 ## Evaluate one random-effects term under its covariance structure
 ## Translation of the currently supported cases in
-## termwise_nll(), glmmTMB.cpp:358-506
+## termwise_nll(), glmmTMB.cpp:358-590
 termwise_nll <- function(U, theta, term) {
   ## Preserve automatic differentiation when filling correlation matrices
   "[<-" <- RTMB::ADoverload("[<-")
@@ -245,7 +245,7 @@ termwise_nll <- function(U, theta, term) {
   name <- names(term$blockCode)
   supported <- c(
     "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
-    "propto", "equalto"
+    "ar1", "propto", "equalto"
   )
 
   if (!name %in% supported) {
@@ -258,7 +258,8 @@ termwise_nll <- function(U, theta, term) {
 
   ## Homogeneous structures use one standard-deviation parameter;
   ## heterogeneous structures use one parameter per term component.
-  hetvar <- !grepl("^hom", name)
+  homogeneous <- c("homdiag", "homcs", "homtoep", "ar1")
+  hetvar <- !name %in% homogeneous
   n_sd_par <- if (hetvar) n else 1L
 
   logsd <- if (hetvar) {
@@ -330,6 +331,18 @@ termwise_nll <- function(U, theta, term) {
       corr
     },
 
+    ## Homogeneous AR(1) covariance; glmmTMB.cpp:507-590
+    ar1 = {
+      phi <- corr_par[1L] / sqrt(1 + corr_par[1L]^2)
+      corr <- matrix(0, n, n)
+      for (i in seq_len(n)) {
+        for (j in seq_len(n)) {
+          corr[i, j] <- phi^abs(i - j)
+        }
+      }
+      corr
+    },
+
     stop("covariance structure not yet implemented: ", name)
   )
 
@@ -355,6 +368,10 @@ termwise_nll <- function(U, theta, term) {
 
   ## Match C++ full-correlation reporting; equalto always reports its matrix.
   report_corr <- C
+  if (name == "ar1" && term$fullCor == 0) {
+    report_corr <- matrix(phi, 1L, 1L)
+  }
+
   conditional_full_cor <- c(
     "us", "cs", "homcs", "toep", "homtoep", "propto"
   )
@@ -362,5 +379,6 @@ termwise_nll <- function(U, theta, term) {
     report_corr <- matrix(NaN, 1L, 1L)
   }
 
-  list(nll = nll, corr = report_corr, sd = sd)
+  report_sd <- if (name == "ar1") sd[1L] else sd
+  list(nll = nll, corr = report_corr, sd = report_sd)
 }

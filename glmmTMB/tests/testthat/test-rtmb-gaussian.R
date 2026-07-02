@@ -212,6 +212,111 @@ test_that("gaussian: dZI simulation generates structural zeros", {
   expect_true(any(sim != 0))
 })
 
+test_that("gaussian: homogeneous AR1 covariance", {
+  ar1_dat <- transform(sleepstudy, DaysFac = factor(Days))
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days + ar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days + ar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("gaussian: AR1 covariance matrix follows phi distance", {
+  ar1_dat <- transform(sleepstudy, DaysFac = factor(Days))
+
+  glmmTMB:::useRTMB(TRUE)
+  model <- glmmTMB(
+    Reaction ~ Days + ar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    se = FALSE
+  )
+
+  vc <- VarCorr(model)$cond$Subject
+  correlation <- attr(vc, "correlation")
+  phi <- correlation[1L, 2L]
+  expected <- phi^abs(
+    outer(seq_len(nrow(correlation)), seq_len(ncol(correlation)), "-")
+  )
+  dimnames(expected) <- dimnames(correlation)
+
+  expect_equal(correlation, expected, tolerance = tol_varcorr)
+})
+
+test_that("gaussian: AR1 works in zero-inflation model", {
+  ar1_dat <- transform(sleepstudy, DaysFac = factor(Days))
+  set.seed(301)
+  ar1_dat$Reaction[sample(nrow(ar1_dat), 20)] <- 0
+  rho <- 0.4
+  thetazi <- c(log(0.5), rho / sqrt(1 - rho^2))
+  theta_map <- factor(c(NA, NA))
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1 + ar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    start = list(thetazi = thetazi),
+    map = list(thetazi = theta_map),
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1 + ar1(0 + DaysFac | Subject),
+    family = gaussian,
+    data = ar1_dat,
+    start = list(thetazi = thetazi),
+    map = list(thetazi = theta_map),
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$zi,
+    fixef(m_tmb)$zi,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+})
+
 test_that("gaussian: single random intercept (cond RE)", {
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days + (1 | Subject), family = gaussian,
