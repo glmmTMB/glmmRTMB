@@ -112,7 +112,7 @@ rtmb_tpl <- function(parameters, data) {
     probit = RTMB::pnorm(eta),
     cloglog = 1 - exp(-exp(eta)),
     inverse = 1 / eta,
-    lamberW = exp(eta) * exp(exp(eta)),
+    lambertW = exp(eta) * exp(exp(eta)),
     stop("link not yet implemented: ", names(link))
   )
 
