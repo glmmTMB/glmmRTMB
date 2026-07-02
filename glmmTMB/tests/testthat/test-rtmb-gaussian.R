@@ -191,6 +191,27 @@ test_that("gaussian: ZI intercept + random effects match TMB backend (no induced
   expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
 })
 
+test_that("gaussian: dZI simulation generates structural zeros", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days,
+    ziformula = ~ 1,
+    family = gaussian,
+    data = sleepstudy,
+    start = list(betazi = qlogis(0.5)),
+    map = list(betazi = factor(NA)),
+    se = FALSE
+  )
+
+  set.seed(1001)
+  sim <- m_rtmb$obj$simulate(complete = TRUE)$yobs
+
+  expect_length(sim, nrow(sleepstudy))
+  expect_true(all(is.finite(sim)))
+  expect_true(any(sim == 0))
+  expect_true(any(sim != 0))
+})
+
 test_that("gaussian: single random intercept (cond RE)", {
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days + (1 | Subject), family = gaussian,

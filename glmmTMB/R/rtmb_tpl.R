@@ -1,5 +1,68 @@
 cmb <- function(f, d) function(p) f(p, d)
 
+## Wrap a density function with zero-inflation likelihood and simulation support
+dZI <- function(density) {
+  force(density)
+
+  function(x, ..., zi = NULL, log = FALSE, is_zero = NULL) {
+    if (inherits(x, "simref") && !is.null(zi)) {
+      prob_nonzero <- 1 / (1 + exp(zi))
+      if (inherits(prob_nonzero, "simref")) {
+        prob_nonzero <- prob_nonzero$value
+      }
+
+      nonzero <- as.logical(stats::rbinom(length(x), 1, prob_nonzero))
+      density_args <- list(...)
+      density_args <- lapply(density_args, function(arg) {
+        if (length(arg) == length(x)) arg[nonzero] else arg
+      })
+
+      if (any(nonzero)) {
+        do.call(
+          density,
+          c(list(x = x[nonzero]), density_args, list(log = TRUE))
+        )
+      }
+      if (any(!nonzero)) {
+        structural_zero <- x[!nonzero]
+        structural_zero[] <- 0
+      }
+      return(rep(0, length(x)))
+    }
+
+    loglik <- density(x, ..., log = TRUE)
+    if (is.null(zi)) {
+      return(if (log) loglik else exp(loglik))
+    }
+
+    if (is.null(is_zero)) {
+      is_zero <- x == 0
+    }
+
+    log_pz <- -RTMB::logspace_add(0, -zi)
+    log_1mpz <- -RTMB::logspace_add(0, zi)
+    ans <- log_1mpz + loglik
+
+    if (any(is_zero)) {
+      ans[is_zero] <- RTMB::logspace_add(
+        log_pz[is_zero],
+        ans[is_zero]
+      )
+    }
+    if (log) ans else exp(ans)
+  }
+}
+
+## matches tmb's dnorm() arithmetic ordering
+dnorm_tmb <- function(x, mean = 0, sd = 1, log = FALSE) {
+  if (inherits(x, "simref")) {
+    return(RTMB::dnorm(x, mean, sd, log))
+  }
+  z <- (x - mean) / sd
+  ans <- -log(sqrt(2 * pi)) - log(sd) - 0.5 * z * z
+  if (log) ans else exp(ans)
+}
+
 ## Variables injected into rtmb_tpl() by RTMB::getAll()
 utils::globalVariables(c(
   "X", "XS", "Z", "offset", "terms", "family", "link", "weights",
@@ -56,38 +119,20 @@ rtmb_tpl <- function(parameters, data) {
   phi <- exp(etadisp)
 
   ## Gaussian and Poisson observation likelihoods; adapted from
-  ## glmmTMB.cpp:961-967, 975-978, and 1196-1199
-  for(j in seq_along(yobs)){
-    if(!is.na(yobs_obs[j]) || inherits(yobs, "simref")){
-      if (names(family) == "poisson") {
-        tmp_loglik <- RTMB::dpois(yobs[j], mu[j], log=TRUE)
-      } else if(names(family) == "gaussian"){
-        if (inherits(yobs, "simref")) {
-          tmp_loglik <- RTMB::dnorm(yobs[j], mu[j], sd=phi[j], log=TRUE)
-        } else {
-          z <- (yobs[j] - mu[j]) / phi[j]
-          tmp_loglik <- -(log(phi[j]) + 0.5 * log(2 * pi) + 0.5 * z * z)
-        }
-      } else {
-        stop("not yet implemented")
-      }
+  ## glmmTMB.cpp:961-967, 975-978, and 1180-1199
+  i <- !is.na(yobs_obs) | inherits(yobs, "simref")
+  zi <- if (has_zi) etazi[i] else NULL
 
-      if(has_zi){
-        ## Compute log(p_zero) and log(1 - p_zero) directly from the logit-scale
-        ## predictor then combine the structural-zero and conditional components
-        ## Adapted from glmmTMB.cpp:1180-1193
+  tmp_loglik <- switch(
+    names(family),
+    poisson = dZI(RTMB::dpois)(yobs[i], lambda = mu[i], zi = zi, log = TRUE,
+                               is_zero = yobs_obs[i] == 0),
+    gaussian = dZI(dnorm_tmb)(yobs[i], mean = mu[i], sd = phi[i], zi = zi,
+                              log = TRUE, is_zero = yobs_obs[i] == 0),
+    stop("family not yet implemented: ", names(family))
+  )
 
-        log_pz <- -RTMB::logspace_add(0, -etazi[j])
-        log_1mpz <- -RTMB::logspace_add(0, etazi[j])
-        if(yobs_obs[j] == 0) {
-          tmp_loglik <- RTMB::logspace_add(log_pz, log_1mpz + tmp_loglik)
-        } else {
-          tmp_loglik <- log_1mpz + tmp_loglik
-        }
-      }
-      nll <- nll - weights[j] * tmp_loglik
-    }
-  }
+  nll <- nll - sum(weights[i] * tmp_loglik)
   corr <- cond_re$corr
   sd <- cond_re$sd
   corrzi <- zi_re$corr
