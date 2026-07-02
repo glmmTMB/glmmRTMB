@@ -31,13 +31,12 @@ rtmb_tpl <- function(parameters, data) {
   Xc <- if (sparseX) XS else X
   eta <- Xc %*% beta + Z %*% b + offset
 
-  if (names(link) == "log") {
-    mu <- exp(eta)
-  } else if(names(link) == "identity"){
-    mu <- eta
-  } else {
-    stop("not yet implemented")
-  }
+  mu <- switch(
+    names(link),
+    log = exp(eta),
+    identity = eta,
+    stop("link not yet implemented: ", names(link))
+  )
 
   ## Zero-inflation linear predictor; adapted from
   ## glmmTMB.cpp:836, 880, and 919-925
