@@ -162,18 +162,31 @@ test_that("gaussian: zero-inflation fixed effects match TMB backend (no induced 
 
 test_that("gaussian: random-only ZI formula (~0 + RE, induced zeros)", {
   set.seed(104)
-  sleepstudy$Reaction[sample(nrow(sleepstudy), 5)] <- 0
+  sleepstudy$Reaction[sample(nrow(sleepstudy), nrow(sleepstudy) / 2)] <- 0
+  thetazi <- log(0.5)
+  theta_map <- factor(NA)
 
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days, ziformula = ~ 0 + (1 | Subject),
-                     family = gaussian, data = sleepstudy, se = FALSE)
+                     family = gaussian, data = sleepstudy,
+                     start = list(thetazi = thetazi),
+                     map = list(thetazi = theta_map), se = FALSE)
 
   glmmTMB:::useRTMB(FALSE)
   m_tmb <- glmmTMB(Reaction ~ Days, ziformula = ~ 0 + (1 | Subject),
-                    family = gaussian, data = sleepstudy, se = FALSE)
+                    family = gaussian, data = sleepstudy,
+                    start = list(thetazi = thetazi),
+                    map = list(thetazi = theta_map), se = FALSE)
+  m_nozi <- glmmTMB(Reaction ~ Days, ziformula = ~ 0,
+                     family = gaussian, data = sleepstudy, se = FALSE)
 
   expect_equal(as.numeric(logLik(m_rtmb)), as.numeric(logLik(m_tmb)),
                tolerance = tol_logLik)
+  expect_equal(VarCorr(m_rtmb), VarCorr(m_tmb), tolerance = tol_varcorr)
+  expect_gt(
+    abs(as.numeric(logLik(m_tmb)) - as.numeric(logLik(m_nozi))),
+    1
+  )
 })
 
 test_that("gaussian: ZI intercept + random effects match TMB backend (no induced zeros)", {

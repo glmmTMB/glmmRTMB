@@ -118,8 +118,7 @@ rtmb_tpl <- function(parameters, data) {
 
   ## Zero-inflation linear predictor; adapted from
   ## glmmTMB.cpp:836, 880, and 919-925
-  # has_zi <- length(betazi) > 0 || length(bzi) > 0
-  has_zi <- length(betazi) > 0
+  has_zi <- length(betazi) > 0 || length(bzi) > 0
   if (has_zi) {
     sparseXzi <- nrow(Xzi) == 0 && ncol(Xzi) == 0
     Xzic <- if (sparseXzi) XziS else Xzi
