@@ -288,7 +288,7 @@ termwise_nll <- function(U, theta, term) {
   name <- names(term$blockCode)
   supported <- c(
     "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
-    "ar1", "hetar1", "ou", "propto", "equalto"
+    "ar1", "hetar1", "ou", "exp", "gau", "propto", "equalto"
   )
 
   if (!name %in% supported) {
@@ -301,7 +301,9 @@ termwise_nll <- function(U, theta, term) {
 
   ## Homogeneous structures use one standard-deviation parameter;
   ## heterogeneous structures use one parameter per term component.
-  homogeneous <- c("homdiag", "homcs", "homtoep", "ar1", "ou")
+  homogeneous <- c(
+    "homdiag", "homcs", "homtoep", "ar1", "ou", "exp", "gau"
+  )
   hetvar <- !name %in% homogeneous
   n_sd_par <- if (hetvar) n else 1L
 
@@ -403,6 +405,48 @@ termwise_nll <- function(U, theta, term) {
       }
       corr
     },
+
+    ## Exponential spatial covariance; glmmTMB.cpp:653-700
+    exp = {
+      spatial_dist <- term$dist
+      spatial_dim <- dim(spatial_dist)
+      if (length(spatial_dim) != 2L || any(spatial_dim != n)) {
+        stop("Dimension of distance matrix must equal block size")
+      }
+      corr <- matrix(0, n, n)
+      for (i in seq_len(n)) {
+        for (j in seq_len(n)) {
+          corr[i, j] <- if (i == j) {
+            1
+          } else {
+            exp(-spatial_dist[i, j] * exp(-corr_par[1L]))
+          }
+        }
+      }
+      corr
+    },
+
+    ## Gaussian spatial covariance; glmmTMB.cpp:653-700
+    gau = {
+      spatial_dist <- term$dist
+      spatial_dim <- dim(spatial_dist)
+      if (length(spatial_dim) != 2L || any(spatial_dim != n)) {
+        stop("Dimension of distance matrix must equal block size")
+      }
+      corr <- matrix(0, n, n)
+      for (i in seq_len(n)) {
+        for (j in seq_len(n)) {
+          corr[i, j] <- if (i == j) {
+            1
+          } else {
+            exp(
+              -(spatial_dist[i, j]^2) * exp(-2 * corr_par[1L])
+            )
+          }
+        }
+      }
+      corr
+    },
     stop("covariance structure not yet implemented: ", name)
   )
 
@@ -431,6 +475,9 @@ termwise_nll <- function(U, theta, term) {
   }
   if (name == "ou" && term$fullCor == 0) {
     report_corr <- matrix(decay, 1L, 1L)
+  }
+  if (name %in% c("exp", "gau") && term$fullCor == 0) {
+    report_corr <- matrix(numeric(0), 0, 0)
   }
 
   conditional_full_cor <- c(
