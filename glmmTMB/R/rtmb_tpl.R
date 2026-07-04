@@ -72,6 +72,31 @@ dnorm_tmb <- local({
   }
 })
 
+## zero-truncated poisson density
+dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
+  if (inherits(x, "simref")) {
+    if (inherits(lambda, "simref")) {
+      lambda <- lambda$value
+    }
+    ## Draw from the conditional upper tail
+    # expm1() helps for accuracy when lambda is close to zero.
+    upper_prob <- stats::runif(length(x)) * (-expm1(-lambda))
+    x[] <- stats::qpois(upper_prob, lambda = lambda, lower.tail = FALSE)
+    return(rep(0, length(x)))
+  }
+
+  log_nzprob <- RTMB::logspace_sub(0, -lambda)
+  ans <- RTMB::dpois(x, lambda = lambda, log = TRUE) - log_nzprob
+
+  ## the conditional distribution has strictly positive support
+  is_zero <- x < 0.001
+  if (any(is_zero)) {
+    ## return -Inf to let dZI() treat observed zeros as structural
+    ans[is_zero] <- -Inf
+  }
+  if (log) ans else exp(ans)
+}
+
 ## Variables injected into rtmb_tpl() by RTMB::getAll()
 utils::globalVariables(c(
   "X", "XS", "Z", "offset", "terms", "family", "link", "weights",
@@ -132,8 +157,8 @@ rtmb_tpl <- function(parameters, data) {
   etadisp <- Xdispc %*% betadisp + Zdisp %*% bdisp + dispoffset
   phi <- exp(etadisp)
 
-  ## Gaussian and Poisson observation likelihoods; adapted from
-  ## glmmTMB.cpp:961-967, 975-978, and 1180-1199
+  ## Observation likelihoods; adapted from glmmTMB.cpp:961-978,
+  ## 1095-1101, and 1180-1199
   i <- !is.na(yobs_obs) | inherits(yobs, "simref")
   zi <- if (has_zi) etazi[i] else NULL
 
@@ -141,6 +166,10 @@ rtmb_tpl <- function(parameters, data) {
     names(family),
     poisson = dZI(RTMB::dpois)(yobs[i], lambda = mu[i], zi = zi, log = TRUE,
                                is_zero = yobs_obs[i] == 0),
+    truncated_poisson = dZI(dtruncated_poisson_rtmb)(
+      yobs[i], lambda = mu[i], zi = zi, log = TRUE,
+      is_zero = yobs_obs[i] == 0
+    ),
     gaussian = dZI(dnorm_tmb)(yobs[i], mean = mu[i], sd = phi[i], zi = zi,
                               log = TRUE, is_zero = yobs_obs[i] == 0),
     stop("family not yet implemented: ", names(family))
