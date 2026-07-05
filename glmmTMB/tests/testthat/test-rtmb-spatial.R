@@ -125,6 +125,71 @@ test_that("Gaussian spatial covariance matches TMB and distance formula", {
   expect_equal(correlation, expected, tolerance = tol_varcorr)
 })
 
+test_that("Matern spatial covariance matches TMB and distance formula", {
+  spatial_sd <- 0.6
+  spatial_range <- 1.4
+  smoothness <- 1.2
+  theta <- c(
+    log(spatial_sd),
+    log(spatial_range),
+    log(smoothness)
+  )
+  theta_map <- factor(rep(NA, length(theta)))
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    gaussian_response ~ x + mat(0 + pos | group),
+    family = gaussian,
+    data = spatial_data,
+    start = list(theta = theta),
+    map = list(theta = theta_map),
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    gaussian_response ~ x + mat(0 + pos | group),
+    family = gaussian,
+    data = spatial_data,
+    start = list(theta = theta),
+    map = list(theta = theta_map),
+    se = FALSE
+  )
+
+  correlation <- attr(VarCorr(m_rtmb)$cond$group, "correlation")
+  coordinates <- glmmTMB::parseNumLevels(rownames(correlation))
+  scaled_distance <- as.matrix(dist(coordinates)) / spatial_range
+  expected <- matrix(1, nrow(scaled_distance), ncol(scaled_distance))
+  off_diagonal <- row(expected) != col(expected)
+  expected[off_diagonal] <-
+    scaled_distance[off_diagonal]^smoothness *
+      besselK(scaled_distance[off_diagonal], smoothness) /
+      (exp(lgamma(smoothness)) * 2^(smoothness - 1))
+  dimnames(expected) <- dimnames(correlation)
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    VarCorr(m_rtmb),
+    VarCorr(m_tmb),
+    tolerance = tol_varcorr
+  )
+  expect_equal(correlation, expected, tolerance = tol_varcorr)
+
+  set.seed(4004)
+  simulation <- m_rtmb$obj$simulate(complete = TRUE)$yobs
+  expect_length(simulation, nrow(spatial_data))
+  expect_true(all(is.finite(simulation)))
+})
+
 test_that("exponential spatial covariance works with Poisson responses", {
   theta <- c(log(0.5), log(1.2))
   theta_map <- factor(c(NA, NA))
@@ -242,4 +307,46 @@ test_that("spatial covariance simulation works under RTMB", {
   expect_length(gau_simulation, nrow(spatial_data))
   expect_true(all(is.finite(exp_simulation)))
   expect_true(all(is.finite(gau_simulation)))
+})
+
+test_that("RTMB covariance structures validate parameter counts", {
+  n <- 4L
+  expected <- c(
+    diag = n,
+    homdiag = 1L,
+    us = n * (n + 1L) / 2L,
+    cs = n + 1L,
+    homcs = 2L,
+    toep = 2L * n - 1L,
+    homtoep = n,
+    ar1 = 2L,
+    hetar1 = n + 1L,
+    ou = 2L,
+    exp = 2L,
+    gau = 2L,
+    mat = 3L,
+    propto = n * (n + 1L) / 2L + 1L,
+    equalto = n * (n + 1L) / 2L
+  )
+
+  for (name in names(expected)) {
+    term <- list(
+      blockCode = glmmTMB:::.valid_covstruct[name],
+      blockSize = n,
+      blockReps = 1L
+    )
+
+    expect_error(
+      glmmTMB:::termwise_nll(
+        numeric(n),
+        numeric(expected[[name]] - 1L),
+        term
+      ),
+      paste0(
+        "Expected ", expected[[name]],
+        " covariance parameters for '", name, "'"
+      ),
+      fixed = TRUE
+    )
+  }
 })

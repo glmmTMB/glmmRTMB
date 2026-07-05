@@ -280,7 +280,7 @@ tmb_unstructured_corr <- function(n, theta) {
 
 ## Evaluate one random-effects term under its covariance structure
 ## Translation of the currently supported cases in
-## termwise_nll(), glmmTMB.cpp:358-650
+## termwise_nll(), glmmTMB.cpp:358-700
 termwise_nll <- function(U, theta, term) {
   ## Preserve automatic differentiation when filling correlation matrices
   "[<-" <- RTMB::ADoverload("[<-")
@@ -288,7 +288,7 @@ termwise_nll <- function(U, theta, term) {
   name <- names(term$blockCode)
   supported <- c(
     "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
-    "ar1", "hetar1", "ou", "exp", "gau", "propto", "equalto"
+    "ar1", "hetar1", "ou", "exp", "gau", "mat", "propto", "equalto"
   )
 
   if (!name %in% supported) {
@@ -299,10 +299,35 @@ termwise_nll <- function(U, theta, term) {
   reps <- term$blockReps
   dim(U) <- c(n, reps)
 
+  expected_num_theta <- switch(
+    name,
+    diag = n,
+    homdiag = 1L,
+    us = n * (n + 1L) / 2L,
+    cs = n + 1L,
+    homcs = 2L,
+    toep = 2L * n - 1L,
+    homtoep = n,
+    ar1 = 2L,
+    hetar1 = n + 1L,
+    ou = 2L,
+    exp = 2L,
+    gau = 2L,
+    mat = 3L,
+    propto = n * (n + 1L) / 2L + 1L,
+    equalto = n * (n + 1L) / 2L
+  )
+  if (length(theta) != expected_num_theta) {
+    stop(
+      "Expected ", expected_num_theta, " covariance parameters for '",
+      name, "', got ", length(theta)
+    )
+  }
+
   ## Homogeneous structures use one standard-deviation parameter;
   ## heterogeneous structures use one parameter per term component.
   homogeneous <- c(
-    "homdiag", "homcs", "homtoep", "ar1", "ou", "exp", "gau"
+    "homdiag", "homcs", "homtoep", "ar1", "ou", "exp", "gau", "mat"
   )
   hetvar <- !name %in% homogeneous
   n_sd_par <- if (hetvar) n else 1L
@@ -447,6 +472,34 @@ termwise_nll <- function(U, theta, term) {
       }
       corr
     },
+
+    ## Matern covariance; glmmTMB.cpp:653-700
+    mat = {
+      spatial_dist <- term$dist
+      spatial_dim <- dim(spatial_dist)
+      if (length(spatial_dim) != 2L || any(spatial_dim != n)) {
+        stop("Dimension of distance matrix must equal block size")
+      }
+      range <- exp(corr_par[1L])
+      smoothness <- exp(corr_par[2L])
+      corr <- matrix(0, n, n)
+      for (i in seq_len(n)) {
+        for (j in seq_len(n)) {
+          if (i == j) {
+            corr[i, j] <- 1
+          } else {
+            scaled_dist <- spatial_dist[i, j] / range
+            corr[i, j] <-
+              scaled_dist^smoothness * RTMB::besselK(
+                scaled_dist,
+                smoothness
+              ) /
+              (exp(lgamma(smoothness)) * 2^(smoothness - 1))
+          }
+        }
+      }
+      corr
+    },
     stop("covariance structure not yet implemented: ", name)
   )
 
@@ -476,7 +529,7 @@ termwise_nll <- function(U, theta, term) {
   if (name == "ou" && term$fullCor == 0) {
     report_corr <- matrix(decay, 1L, 1L)
   }
-  if (name %in% c("exp", "gau") && term$fullCor == 0) {
+  if (name %in% c("exp", "gau", "mat") && term$fullCor == 0) {
     report_corr <- matrix(numeric(0), 0, 0)
   }
 
