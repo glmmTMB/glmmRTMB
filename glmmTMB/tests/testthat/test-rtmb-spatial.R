@@ -325,11 +325,20 @@ test_that("RTMB covariance structures validate parameter counts", {
     exp = 2L,
     gau = 2L,
     mat = 3L,
+    rr = 2L * n - 1L,
     propto = n * (n + 1L) / 2L + 1L,
     equalto = n * (n + 1L) / 2L
   )
 
   for (name in names(expected)) {
+    expected_message <- if (name == "rr") {
+      "Invalid covariance parameter count for 'rr'"
+    } else {
+      paste0(
+        "Expected ", expected[[name]],
+        " covariance parameters for '", name, "'"
+      )
+    }
     term <- list(
       blockCode = glmmTMB:::.valid_covstruct[name],
       blockSize = n,
@@ -342,10 +351,7 @@ test_that("RTMB covariance structures validate parameter counts", {
         numeric(expected[[name]] - 1L),
         term
       ),
-      paste0(
-        "Expected ", expected[[name]],
-        " covariance parameters for '", name, "'"
-      ),
+      expected_message,
       fixed = TRUE
     )
   }

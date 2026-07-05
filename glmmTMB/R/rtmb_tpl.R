@@ -121,6 +121,9 @@ rtmb_tpl <- function(parameters, data) {
   zi_re <- allterms_nll(bzi, thetazi, termszi)
   disp_re <- allterms_nll(bdisp, thetadisp, termsdisp)
   nll <- nll + cond_re$nll + zi_re$nll + disp_re$nll
+  b <- cond_re$u
+  bzi <- zi_re$u
+  bdisp <- disp_re$u
 
   ## Conditional linear predictor and inverse link; adapted from
   ## glmmTMB.cpp:833, 911-918, and 934-937
@@ -182,6 +185,7 @@ rtmb_tpl <- function(parameters, data) {
   sdzi <- zi_re$sd
   corrdisp <- disp_re$corr
   sddisp <- disp_re$sd
+  fact_load <- cond_re$fact_load
 
   REPORT(corr)
   REPORT(sd)
@@ -189,6 +193,7 @@ rtmb_tpl <- function(parameters, data) {
   REPORT(sdzi)
   REPORT(corrdisp)
   REPORT(sddisp)
+  REPORT(fact_load)
   REPORT(b)
   REPORT(bzi)
   REPORT(bdisp)
@@ -198,16 +203,24 @@ rtmb_tpl <- function(parameters, data) {
 ## Partition the concatenated random effects and covariance parameters by term
 ## Term slicing is translated from allterms_nll() in glmmTMB.cpp:803-826
 allterms_nll <- function(u, theta, terms) {
+  "[<-" <- RTMB::ADoverload("[<-")
+
   nll <- 0
   corr <- vector("list", length(terms))
   sd <- vector("list", length(terms))
+  fact_load <- vector("list", length(terms))
   names(corr) <- names(terms)
   names(sd) <- names(terms)
+  names(fact_load) <- names(terms)
 
   if (length(terms) == 0) {
-    return(list(nll = nll, corr = corr, sd = sd))
+    output_u <- if (inherits(u, "simref")) u$value else u
+    return(list(
+      nll = nll, corr = corr, sd = sd, fact_load = fact_load, u = output_u
+    ))
   }
 
+  transformed_u <- u
   upointer <- 0L
   tpointer <- 0L
   np <- 0L
@@ -237,12 +250,28 @@ allterms_nll <- function(u, theta, terms) {
     nll <- nll + ans$nll
     corr[[i]] <- ans$corr
     sd[[i]] <- ans$sd
+    fact_load[[i]] <- ans$fact_load
+    if (!inherits(transformed_u, "simref")) {
+      transformed_u[(upointer + 1L):(upointer + nr)] <- ans$u
+    }
 
     upointer <- upointer + nr
     tpointer <- tpointer + term$blockNumTheta
   }
 
-  list(nll = nll, corr = corr, sd = sd)
+  output_u <- if (inherits(transformed_u, "simref")) {
+    transformed_u$value
+  } else {
+    transformed_u
+  }
+
+  list(
+    nll = nll,
+    corr = corr,
+    sd = sd,
+    fact_load = fact_load,
+    u = output_u
+  )
 }
 
 ## Construct the correlation matrix used by TMB's
@@ -280,15 +309,25 @@ tmb_unstructured_corr <- function(n, theta) {
 
 ## Evaluate one random-effects term under its covariance structure
 ## Translation of the currently supported cases in
-## termwise_nll(), glmmTMB.cpp:358-700
+## termwise_nll(), glmmTMB.cpp:358-799
 termwise_nll <- function(U, theta, term) {
   ## Preserve automatic differentiation when filling correlation matrices
   "[<-" <- RTMB::ADoverload("[<-")
 
-  name <- names(term$blockCode)
+  block_code <- term$blockCode
+  name <- if (is.character(block_code) && length(block_code) == 1L) {
+    block_code
+  } else {
+    block_name <- names(block_code)
+    if (is.null(block_name) || length(block_name) == 0L) {
+      names(.valid_covstruct)[match(block_code, .valid_covstruct)]
+    } else {
+      block_name[1L]
+    }
+  }
   supported <- c(
     "diag", "homdiag", "us", "cs", "homcs", "toep", "homtoep",
-    "ar1", "hetar1", "ou", "exp", "gau", "mat", "propto", "equalto"
+    "ar1", "hetar1", "ou", "exp", "gau", "mat", "rr", "propto", "equalto"
   )
 
   if (!name %in% supported) {
@@ -298,6 +337,33 @@ termwise_nll <- function(U, theta, term) {
   n <- term$blockSize
   reps <- term$blockReps
   dim(U) <- c(n, reps)
+
+  rr_rank <- NA_integer_
+  if (name == "rr") {
+    ntheta <- length(theta)
+    rank_discriminant <- (2 * n + 1)^2 - 8 * ntheta
+    if (rank_discriminant < 0) {
+      stop(
+        "Invalid covariance parameter count for 'rr': ", ntheta,
+        " does not correspond to a rank between 1 and ", n
+      )
+    }
+    rank_value <- (
+      2 * n + 1 - sqrt(rank_discriminant)
+    ) / 2
+    rr_rank <- as.integer(round(rank_value))
+    valid_rank <- is.finite(rank_value) &&
+      abs(rank_value - rr_rank) < sqrt(.Machine$double.eps) &&
+      rr_rank >= 1L &&
+      rr_rank <= n
+
+    if (!valid_rank) {
+      stop(
+        "Invalid covariance parameter count for 'rr': ", ntheta,
+        " does not correspond to a rank between 1 and ", n
+      )
+    }
+  }
 
   expected_num_theta <- switch(
     name,
@@ -314,6 +380,7 @@ termwise_nll <- function(U, theta, term) {
     exp = 2L,
     gau = 2L,
     mat = 3L,
+    rr = n * rr_rank - (rr_rank - 1L) * rr_rank / 2L,
     propto = n * (n + 1L) / 2L + 1L,
     equalto = n * (n + 1L) / 2L
   )
@@ -322,6 +389,66 @@ termwise_nll <- function(U, theta, term) {
       "Expected ", expected_num_theta, " covariance parameters for '",
       name, "', got ", length(theta)
     )
+  }
+
+  if (name == "rr") {
+    ## Reduced-rank covariance; glmmTMB.cpp:698-761. The optimized random
+    ## effects are spherical, while the linear predictor uses Lambda %*% u.
+    nll <- 0
+    simulation <- inherits(U, "simref")
+
+    if (!simulation || term$simCode == .valid_simcode[["random"]]) {
+      for (j in seq_len(reps)) {
+        nll <- nll - sum(dnorm_tmb(U[, j], 0, 1, log = TRUE))
+      }
+    } else if (term$simCode == .valid_simcode[["zero"]]) {
+      U[] <- 0
+    }
+
+    Lambda <- matrix(0, n, rr_rank)
+    lam_diag <- head(theta, rr_rank)
+    lam_lower <- utils::tail(theta, length(theta) - rr_rank)
+    lower_index <- 1L
+
+    for (j in seq_len(rr_rank)) {
+      for (i in seq_len(n)) {
+        if (j == i) {
+          Lambda[i, j] <- lam_diag[j]
+        } else if (j < i) {
+          Lambda[i, j] <- lam_lower[lower_index]
+          lower_index <- lower_index + 1L
+        }
+      }
+    }
+
+    if (term$simCode != .valid_simcode[["fix"]]) {
+      for (j in seq_len(reps)) {
+        transformed_column <- Lambda %*% U[seq_len(rr_rank), j]
+        if (simulation) {
+          U_column <- U[, j]
+          U_column[] <- transformed_column
+        } else {
+          U[, j] <- transformed_column
+        }
+      }
+    }
+
+    report_corr <- matrix(numeric(0), 0, 0)
+    report_sd <- numeric(0)
+    if (term$fullCor == 1L) {
+      covariance <- Lambda %*% t(Lambda)
+      report_sd <- sqrt(diag(covariance))
+      report_corr <- covariance /
+        (report_sd %*% t(report_sd))
+    }
+
+    return(list(
+      nll = nll,
+      corr = report_corr,
+      sd = report_sd,
+      fact_load = Lambda,
+      u = if (simulation) NULL else as.vector(U)
+    ))
   }
 
   ## Homogeneous structures use one standard-deviation parameter;
@@ -545,5 +672,11 @@ termwise_nll <- function(U, theta, term) {
   } else {
     sd
   }
-  list(nll = nll, corr = report_corr, sd = report_sd)
+  list(
+    nll = nll,
+    corr = report_corr,
+    sd = report_sd,
+    fact_load = matrix(numeric(0), 0, 0),
+    u = if (inherits(U, "simref")) NULL else as.vector(U)
+  )
 }
