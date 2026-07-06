@@ -1,6 +1,6 @@
 # glmmTMB
 
-(RTMB-enabled version)
+(RTMB-enabled version: development docs [here](https://docs.google.com/document/d/1NNl8Z_W3P_MRzw0JqbLCapQH3nqO86xjwWbPvfQWpp8/edit?tab=t.0#heading=h.2t1vhdqwjy7o)
 
 <!-- badges: start -->
 [![cran version](http://www.r-pkg.org/badges/version/glmmTMB)](https://cran.r-project.org/package=glmmTMB)
@@ -29,4 +29,3 @@ The mailing list has more people who know about using mixed models in R; CrossVa
 
 Please do **not** cross-post, i.e. ask the same question in more than one forum, unless it's suggested that you have posted in the wrong place, or unless you receive total silence in one forum. In the latter case it may be better to send a reminder/"bump" message to the original forum; in any case you should mention in your new message where/when you've previously asked the question.
 
->>>>>>> ad39dd17e46276b7d6398468135c5f212972264c
