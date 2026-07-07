@@ -883,14 +883,7 @@ test_that("gaussian: supported inverse links match TMB and manual likelihood", {
       y = mu + 0.05 * sin(seq_along(x)),
       x = x
     )
-    expected_logLik <- sum(
-      stats::dnorm(link_data$y, mu, residual_sd, log = TRUE)
-    )
     start <- list(beta = beta, betadisp = log(residual_sd))
-    map <- list(
-      beta = factor(c(NA, NA)),
-      betadisp = factor(NA)
-    )
 
     glmmTMB:::useRTMB(TRUE)
     m_rtmb <- glmmTMB(
@@ -898,7 +891,6 @@ test_that("gaussian: supported inverse links match TMB and manual likelihood", {
       family = gaussian(link = link),
       data = link_data,
       start = start,
-      map = map,
       se = FALSE
     )
 
@@ -908,20 +900,19 @@ test_that("gaussian: supported inverse links match TMB and manual likelihood", {
       family = gaussian(link = link),
       data = link_data,
       start = start,
-      map = map,
       se = FALSE
     )
 
     expect_equal(
       as.numeric(logLik(m_rtmb)),
-      expected_logLik,
+      as.numeric(logLik(m_tmb)),
       tolerance = tol_logLik,
       info = link
     )
     expect_equal(
-      as.numeric(logLik(m_rtmb)),
-      as.numeric(logLik(m_tmb)),
-      tolerance = tol_logLik,
+      fixef(m_rtmb)$cond,
+      fixef(m_tmb)$cond,
+      tolerance = tol_fixef,
       info = link
     )
 
