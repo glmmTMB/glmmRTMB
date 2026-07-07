@@ -65,7 +65,20 @@ dnorm_tmb <- local({
 
   function(x, mean = 0, sd = 1, log = FALSE) {
     if (inherits(x, "simref")) {
-      return(RTMB::dnorm(x, mean, sd, log))
+      if (inherits(mean, "simref")) {
+        mean <- mean$value
+      }
+      if (inherits(sd, "simref")) {
+        sd <- sd$value
+      }
+      if (inherits(mean, "Matrix")) {
+        mean <- as.matrix(mean)
+      }
+      if (inherits(sd, "Matrix")) {
+        sd <- as.matrix(sd)
+      }
+      x[] <- stats::rnorm(length(x), mean = as.vector(mean), sd = as.vector(sd))
+      return(rep(0, length(x)))
     }
     ans <- log_density(x, mean, sd)
     if (log) ans else exp(ans)
