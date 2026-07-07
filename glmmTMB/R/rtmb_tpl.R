@@ -137,7 +137,13 @@ rtmb_tpl <- function(parameters, data) {
     identity = eta,
     sqrt = eta * eta,
     logit = 1 / (1 + exp(-eta)),
-    probit = RTMB::pnorm(eta),
+    probit = {
+      probit_eta <- if (inherits(eta, "simref")) eta$value else eta
+      if (inherits(probit_eta, "Matrix")) {
+        probit_eta <- as.matrix(probit_eta)
+      }
+      RTMB::pnorm(probit_eta)
+    },
     cloglog = 1 - exp(-exp(eta)),
     inverse = 1 / eta,
     lambertW = exp(eta) * exp(exp(eta)),
@@ -397,12 +403,18 @@ termwise_nll <- function(U, theta, term) {
     nll <- 0
     simulation <- inherits(U, "simref")
 
+    if (simulation && !term$simCode %in% .valid_simcode) {
+      stop("unknown simcode")
+    }
+
     if (!simulation || term$simCode == .valid_simcode[["random"]]) {
       for (j in seq_len(reps)) {
         nll <- nll - sum(dnorm_tmb(U[, j], 0, 1, log = TRUE))
       }
     } else if (term$simCode == .valid_simcode[["zero"]]) {
       U[] <- 0
+    } else {
+      U[] <- U$getOrig(seq_along(U))
     }
 
     Lambda <- matrix(0, n, rr_rank)
@@ -630,9 +642,40 @@ termwise_nll <- function(U, theta, term) {
     stop("covariance structure not yet implemented: ", name)
   )
 
+  simulation <- inherits(U, "simref")
+  simulate_density <- TRUE
+  if (simulation) {
+    if (!term$simCode %in% .valid_simcode) {
+      stop("unknown simcode")
+    }
+
+    flexible_simulation <- c("diag", "us", "ar1", "hetar1", "ou")
+    random_only_simulation <- c(
+      "homdiag", "cs", "homcs", "toep", "homtoep",
+      "exp", "gau", "mat"
+    )
+
+    if (name %in% flexible_simulation) {
+      if (term$simCode == .valid_simcode[["zero"]]) {
+        U[] <- 0
+        simulate_density <- FALSE
+      } else if (term$simCode == .valid_simcode[["fix"]]) {
+        U[] <- U$getOrig(seq_along(U))
+        simulate_density <- FALSE
+      }
+    } else if (
+      name %in% random_only_simulation &&
+      term$simCode != .valid_simcode[["random"]]
+    ) {
+      stop("simcode not yet implemented for ", name, " covariance structure")
+    }
+  }
+
   ## Diagonal structures factor into univariate normal densities;
   ## correlated structures use a scaled multivariate normal density.
-  if (density_structure == "diag") {
+  if (!simulate_density) {
+    nll <- 0
+  } else if (density_structure == "diag") {
     nll <- 0
 
     for (k in seq_len(n)) {

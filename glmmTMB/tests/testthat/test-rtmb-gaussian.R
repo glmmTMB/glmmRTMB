@@ -849,6 +849,88 @@ test_that("gaussian (Salamanders): simulate() works under RTMB backend", {
   expect_true(all(is.finite(sim$yobs)))
 })
 
+test_that("gaussian: supported inverse links match TMB and manual likelihood", {
+  link_parameters <- list(
+    identity = c(0.3, 0.4),
+    log = c(-0.3, 0.4),
+    inverse = c(2, 0.3),
+    sqrt = c(0.8, 0.2),
+    logit = c(-0.4, 0.8),
+    probit = c(-0.2, 0.6),
+    cloglog = c(-0.4, 0.5)
+  )
+  x <- seq(-0.5, 0.5, length.out = 80)
+  residual_sd <- 0.2
+
+  inverse_link <- function(link, eta) {
+    switch(
+      link,
+      identity = eta,
+      log = exp(eta),
+      inverse = 1 / eta,
+      sqrt = eta^2,
+      logit = 1 / (1 + exp(-eta)),
+      probit = stats::pnorm(eta),
+      cloglog = 1 - exp(-exp(eta))
+    )
+  }
+
+  for (link in names(link_parameters)) {
+    beta <- link_parameters[[link]]
+    eta <- beta[1L] + beta[2L] * x
+    mu <- inverse_link(link, eta)
+    link_data <- data.frame(
+      y = mu + 0.05 * sin(seq_along(x)),
+      x = x
+    )
+    expected_logLik <- sum(
+      stats::dnorm(link_data$y, mu, residual_sd, log = TRUE)
+    )
+    start <- list(beta = beta, betadisp = log(residual_sd))
+    map <- list(
+      beta = factor(c(NA, NA)),
+      betadisp = factor(NA)
+    )
+
+    glmmTMB:::useRTMB(TRUE)
+    m_rtmb <- glmmTMB(
+      y ~ x,
+      family = gaussian(link = link),
+      data = link_data,
+      start = start,
+      map = map,
+      se = FALSE
+    )
+
+    glmmTMB:::useRTMB(FALSE)
+    m_tmb <- glmmTMB(
+      y ~ x,
+      family = gaussian(link = link),
+      data = link_data,
+      start = start,
+      map = map,
+      se = FALSE
+    )
+
+    expect_equal(
+      as.numeric(logLik(m_rtmb)),
+      expected_logLik,
+      tolerance = tol_logLik,
+      info = link
+    )
+    expect_equal(
+      as.numeric(logLik(m_rtmb)),
+      as.numeric(logLik(m_tmb)),
+      tolerance = tol_logLik,
+      info = link
+    )
+
+    simulation <- m_rtmb$obj$simulate(complete = TRUE)$yobs
+    expect_length(simulation, nrow(link_data))
+    expect_true(all(is.finite(simulation)), info = link)
+  }
+})
+
 
 
 
