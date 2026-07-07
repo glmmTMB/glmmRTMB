@@ -64,7 +64,7 @@ test_that("random-only covariance structures reject other simCode modes", {
     set_simcodes(model$obj, "zero")
     expect_error(
       model$obj$simulate(complete = TRUE),
-      "simcode not yet implemented",
+      "sim[Cc]ode.*implemented",
       info = paste("backend:", backend)
     )
   }

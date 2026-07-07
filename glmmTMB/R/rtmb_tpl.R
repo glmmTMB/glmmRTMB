@@ -147,7 +147,11 @@ rtmb_tpl <- function(parameters, data) {
     cloglog = 1 - exp(-exp(eta)),
     inverse = 1 / eta,
     lambertW = exp(eta) * exp(exp(eta)),
-    stop("link not yet implemented: ", names(link))
+    stop(
+      "link not yet implemented: ", names(link),
+      "; implemented links are: log, identity, sqrt, logit, probit, ",
+      "cloglog, inverse, lambertW"
+    )
   )
 
   ## Zero-inflation linear predictor; adapted from
@@ -181,7 +185,10 @@ rtmb_tpl <- function(parameters, data) {
     ),
     gaussian = dZI(dnorm_tmb)(yobs[i], mean = mu[i], sd = phi[i], zi = zi,
                               log = TRUE, is_zero = yobs_obs[i] == 0),
-    stop("family not yet implemented: ", names(family))
+    stop(
+      "family not yet implemented: ", names(family),
+      "; implemented families are: poisson, truncated_poisson, gaussian"
+    )
   )
 
   nll <- nll - sum(weights[i] * tmp_loglik)
@@ -289,7 +296,10 @@ tmb_unstructured_corr <- function(n, theta) {
 
   expected <- n * (n - 1L) / 2L
   if (length(theta) != expected) {
-    stop("Expected ", expected, " correlation parameters")
+    stop(
+      "Expected ", expected, " correlation parameters for unstructured ",
+      n, " by ", n, " correlation matrix, got ", length(theta)
+    )
   }
 
   L <- diag(n)
@@ -325,7 +335,7 @@ termwise_nll <- function(U, theta, term) {
     block_code
   } else {
     block_name <- names(block_code)
-    if (is.null(block_name) || length(block_name) == 0L) {
+    if (length(block_name) == 0L) {
       names(.valid_covstruct)[match(block_code, .valid_covstruct)]
     } else {
       block_name[1L]
@@ -337,7 +347,10 @@ termwise_nll <- function(U, theta, term) {
   )
 
   if (!name %in% supported) {
-    stop("covariance structure not yet implemented: ", name)
+    stop(
+      "covariance structure not yet implemented: ", name,
+      "; implemented structures are: ", paste(supported, collapse = ", ")
+    )
   }
 
   n <- term$blockSize
@@ -351,7 +364,8 @@ termwise_nll <- function(U, theta, term) {
     if (rank_discriminant < 0) {
       stop(
         "Invalid covariance parameter count for 'rr': ", ntheta,
-        " does not correspond to a rank between 1 and ", n
+        "; rank discriminant is ", rank_discriminant,
+        ", so no real-valued rank can be inferred for block size ", n
       )
     }
     rank_value <- (
@@ -366,7 +380,9 @@ termwise_nll <- function(U, theta, term) {
     if (!valid_rank) {
       stop(
         "Invalid covariance parameter count for 'rr': ", ntheta,
-        " does not correspond to a rank between 1 and ", n
+        "; inferred rank value is ", rank_value,
+        ", rounded rank is ", rr_rank,
+        ", valid ranks are integers from 1 to ", n
       )
     }
   }
@@ -404,7 +420,12 @@ termwise_nll <- function(U, theta, term) {
     simulation <- inherits(U, "simref")
 
     if (simulation && !term$simCode %in% .valid_simcode) {
-      stop("unknown simcode")
+      stop(
+        "unknown simCode for rr covariance structure: ", term$simCode,
+        "; known simCodes are: ",
+        paste(names(.valid_simcode), .valid_simcode, sep = "=",
+              collapse = ", ")
+      )
     }
 
     if (!simulation || term$simCode == .valid_simcode[["random"]]) {
@@ -420,18 +441,9 @@ termwise_nll <- function(U, theta, term) {
     Lambda <- matrix(0, n, rr_rank)
     lam_diag <- head(theta, rr_rank)
     lam_lower <- utils::tail(theta, length(theta) - rr_rank)
-    lower_index <- 1L
 
-    for (j in seq_len(rr_rank)) {
-      for (i in seq_len(n)) {
-        if (j == i) {
-          Lambda[i, j] <- lam_diag[j]
-        } else if (j < i) {
-          Lambda[i, j] <- lam_lower[lower_index]
-          lower_index <- lower_index + 1L
-        }
-      }
-    }
+    Lambda[row(Lambda) == col(Lambda)] <- lam_diag
+    Lambda[row(Lambda) > col(Lambda)] <- lam_lower
 
     if (term$simCode != .valid_simcode[["fix"]]) {
       for (j in seq_len(reps)) {
@@ -556,7 +568,10 @@ termwise_nll <- function(U, theta, term) {
     ou = {
       times <- term$times
       if (length(times) != n) {
-        stop("OU time vector length must equal block size")
+        stop(
+          "OU time vector length must equal block size; got length(times)=",
+          length(times), " and blockSize=", n
+        )
       }
       decay <- exp(corr_par[1L])
       corr <- matrix(0, n, n)
@@ -575,7 +590,12 @@ termwise_nll <- function(U, theta, term) {
       spatial_dist <- term$dist
       spatial_dim <- dim(spatial_dist)
       if (length(spatial_dim) != 2L || any(spatial_dim != n)) {
-        stop("Dimension of distance matrix must equal block size")
+        stop(
+          "Dimension of distance matrix must equal block size for ", name,
+          "; got dim(dist)=",
+          paste(spatial_dim, collapse = " x "),
+          " and blockSize=", n
+        )
       }
       corr <- matrix(0, n, n)
       for (i in seq_len(n)) {
@@ -595,7 +615,12 @@ termwise_nll <- function(U, theta, term) {
       spatial_dist <- term$dist
       spatial_dim <- dim(spatial_dist)
       if (length(spatial_dim) != 2L || any(spatial_dim != n)) {
-        stop("Dimension of distance matrix must equal block size")
+        stop(
+          "Dimension of distance matrix must equal block size for ", name,
+          "; got dim(dist)=",
+          paste(spatial_dim, collapse = " x "),
+          " and blockSize=", n
+        )
       }
       corr <- matrix(0, n, n)
       for (i in seq_len(n)) {
@@ -617,7 +642,12 @@ termwise_nll <- function(U, theta, term) {
       spatial_dist <- term$dist
       spatial_dim <- dim(spatial_dist)
       if (length(spatial_dim) != 2L || any(spatial_dim != n)) {
-        stop("Dimension of distance matrix must equal block size")
+        stop(
+          "Dimension of distance matrix must equal block size for ", name,
+          "; got dim(dist)=",
+          paste(spatial_dim, collapse = " x "),
+          " and blockSize=", n
+        )
       }
       range <- exp(corr_par[1L])
       smoothness <- exp(corr_par[2L])
@@ -639,14 +669,24 @@ termwise_nll <- function(U, theta, term) {
       }
       corr
     },
-    stop("covariance structure not yet implemented: ", name)
+    stop(
+      "covariance structure not yet implemented: ", name,
+      "; implemented density structures are: diag, us, cs, toep, ar1, ",
+      "ou, exp, gau, mat"
+    )
   )
 
   simulation <- inherits(U, "simref")
   simulate_density <- TRUE
   if (simulation) {
     if (!term$simCode %in% .valid_simcode) {
-      stop("unknown simcode")
+      stop(
+        "unknown simCode for ", name, " covariance structure: ",
+        term$simCode,
+        "; known simCodes are: ",
+        paste(names(.valid_simcode), .valid_simcode, sep = "=",
+              collapse = ", ")
+      )
     }
 
     flexible_simulation <- c("diag", "us", "ar1", "hetar1", "ou")
@@ -667,7 +707,12 @@ termwise_nll <- function(U, theta, term) {
       name %in% random_only_simulation &&
       term$simCode != .valid_simcode[["random"]]
     ) {
-      stop("simcode not yet implemented for ", name, " covariance structure")
+      stop(
+        "simCode '",
+        names(.valid_simcode)[match(term$simCode, .valid_simcode)],
+        "' is not implemented for ", name,
+        " covariance structure; only random simulation is currently supported"
+      )
     }
   }
 
