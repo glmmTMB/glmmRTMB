@@ -160,6 +160,10 @@ predict.glmmTMB <- function(object,
     if (!se.fit) message("se.fit set to TRUE because cov.fit = TRUE")
     se.fit <- TRUE
   }
+  rtmb_fit <- !is.null(environment(object$obj$fn)$rtmb_data_env)
+  if (se.fit && rtmb_fit) {
+    stop("Prediction standard errors are not yet implemented for RTMB fits")
+  }
   
   if(is.null(aggregate)) {
     aggregate <- factor()
@@ -241,6 +245,9 @@ predict.glmmTMB <- function(object,
     }
     dd$ziPredictCode <- ziPredCode
     assign("data",dd, ee) ## stick this in the appropriate environment
+    if (!is.null(ee$rtmb_data_env)) {
+      ee$rtmb_data_env$d <- dd
+    }
     newObj <- object$obj
     
     ## restore original values to environment of the object
@@ -251,6 +258,10 @@ predict.glmmTMB <- function(object,
         for (i in names(orig_vals)) {
           dd[[i]] <- orig_vals[[i]]
           assign("data",dd, environment(object$obj$fn))
+          rtmb_data_env <- environment(object$obj$fn)$rtmb_data_env
+          if (!is.null(rtmb_data_env)) {
+            rtmb_data_env$d <- dd
+          }
         }
       },
       add = TRUE)

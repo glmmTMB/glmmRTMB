@@ -110,6 +110,39 @@ dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+apply_zi_prediction <- function(mu, eta, etazi, ziPredictCode) {
+  if (ziPredictCode == .valid_zipredictcode[["corrected"]]) {
+    pz <- 1 / (1 + exp(-etazi))
+    mu <- mu * (1 - pz)
+  } else if (ziPredictCode == .valid_zipredictcode[["uncorrected"]]) {
+    ## leave mu and eta unchanged
+  } else if (ziPredictCode == .valid_zipredictcode[["prob"]]) {
+    mu <- 1 / (1 + exp(-etazi))
+    eta <- etazi
+  } else if (ziPredictCode == .valid_zipredictcode[["disp"]]) {
+    ## handled separately by caller
+  } else {
+    stop("Invalid ziPredictCode: ", ziPredictCode)
+  }
+
+  list(mu = mu, eta = eta)
+}
+
+linkfun_rtmb <- function(mu, link) {
+  switch(
+    names(link),
+    log = log(mu),
+    identity = mu,
+    sqrt = sqrt(mu),
+    logit = log(mu / (1 - mu)),
+    probit = stats::qnorm(mu),
+    cloglog = log(-log(1 - mu)),
+    inverse = 1 / mu,
+    lambertW = stop("linkfun for lambertW not yet implemented"),
+    stop("link not yet implemented for prediction aggregation: ", names(link))
+  )
+}
+
 ## Variables injected into rtmb_tpl() by RTMB::getAll()
 utils::globalVariables(c(
   "X", "XS", "Z", "offset", "terms", "family", "link", "weights",
@@ -117,7 +150,8 @@ utils::globalVariables(c(
   "Xzi", "XziS", "Zzi", "zioffset", "termszi",
   "betazi", "bzi", "thetazi",
   "Xdisp", "XdispS", "Zdisp", "dispoffset", "termsdisp",
-  "betadisp", "bdisp", "thetadisp"
+  "betadisp", "bdisp", "thetadisp",
+  "ziPredictCode", "doPredict", "whichPredict", "aggregate"
 ))
 
 rtmb_tpl <- function(parameters, data) {
@@ -205,6 +239,50 @@ rtmb_tpl <- function(parameters, data) {
   )
 
   nll <- nll - sum(weights[i] * tmp_loglik)
+
+  ## Prediction output; translated from glmmTMB.cpp:1353-1379
+  mu_pred_all <- mu
+  eta_pred_all <- eta
+
+  if (has_zi || ziPredictCode == .valid_zipredictcode[["prob"]]) {
+    zi_pred <- apply_zi_prediction(
+      mu = mu_pred_all,
+      eta = eta_pred_all,
+      etazi = etazi,
+      ziPredictCode = ziPredictCode
+    )
+    mu_pred_all <- zi_pred$mu
+    eta_pred_all <- zi_pred$eta
+  }
+
+  if (ziPredictCode == .valid_zipredictcode[["disp"]]) {
+    mu_pred_all <- phi
+    eta_pred_all <- etadisp
+  }
+
+  mu_predict <- mu_pred_all[whichPredict]
+  eta_predict <- eta_pred_all[whichPredict]
+
+  if (length(aggregate) > 0) {
+    if (length(aggregate) != length(mu_predict)) {
+      stop(
+        "'aggregate' wrong size; got length ", length(aggregate),
+        " but prediction length is ", length(mu_predict)
+      )
+    }
+
+    "[<-" <- RTMB::ADoverload("[<-")
+    n_aggregate <- max(as.integer(aggregate))
+    tmp <- rep(mu_predict[1L] * 0, n_aggregate)
+    for (j in seq_along(mu_predict)) {
+      tmp[as.integer(aggregate[j])] <- tmp[as.integer(aggregate[j])] +
+        mu_predict[j]
+    }
+
+    mu_predict <- tmp
+    eta_predict <- linkfun_rtmb(mu_predict, link)
+  }
+
   corr <- cond_re$corr
   sd <- cond_re$sd
   corrzi <- zi_re$corr
@@ -223,6 +301,18 @@ rtmb_tpl <- function(parameters, data) {
   REPORT(b)
   REPORT(bzi)
   REPORT(bdisp)
+  REPORT(mu_predict)
+  REPORT(eta_predict)
+
+  if (doPredict == 1) {
+    ADREPORT(mu_predict)
+  } else if (doPredict == 2) {
+    ADREPORT(eta_predict)
+  } else if (doPredict == 3) {
+    ADREPORT(b)
+    ADREPORT(bzi)
+    ADREPORT(bdisp)
+  }
 
   nll
 }
