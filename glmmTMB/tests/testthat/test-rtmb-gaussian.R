@@ -1585,3 +1585,34 @@ test_that("RTMB full_cor = FALSE reporting works through MakeADFun", {
 
   expect_identical(fit$obj$report()$corr[[1]], matrix(NaN, 1, 1))
 })
+
+test_that("gaussian: predict with standard errors", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days + (1 | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+  pred_rtmb <- predict(m_rtmb, se.fit = TRUE)
+  link_rtmb <- predict(m_rtmb, type = "link", se.fit = TRUE)
+  disp_rtmb <- predict(m_rtmb, type = "disp", se.fit = TRUE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days + (1 | Subject),
+    family = gaussian,
+    data = sleepstudy,
+    se = FALSE
+  )
+  pred_tmb <- predict(m_tmb, se.fit = TRUE)
+  link_tmb <- predict(m_tmb, type = "link", se.fit = TRUE)
+  disp_tmb <- predict(m_tmb, type = "disp", se.fit = TRUE)
+
+  expect_equal(pred_rtmb$fit, pred_tmb$fit, tolerance = tol_fixef)
+  expect_equal(pred_rtmb$se.fit, pred_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(link_rtmb$fit, link_tmb$fit, tolerance = tol_fixef)
+  expect_equal(link_rtmb$se.fit, link_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(disp_rtmb$fit, disp_tmb$fit, tolerance = tol_fixef)
+  expect_equal(disp_rtmb$se.fit, disp_tmb$se.fit, tolerance = tol_fixef)
+})

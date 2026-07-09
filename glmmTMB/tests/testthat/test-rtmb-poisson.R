@@ -1214,3 +1214,89 @@ test_that("poisson: fixed equal-to covariance", {
     tolerance = tol_varcorr
   )
 })
+
+test_that("poisson: predict with standard errors", {
+  newdata <- Salamanders[seq_len(10), ]
+  aggregate <- Salamanders$mined
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    family = poisson,
+    data = Salamanders,
+    se = FALSE
+  )
+  pred_rtmb <- predict(m_rtmb, se.fit = TRUE)
+  link_rtmb <- predict(m_rtmb, type = "link", se.fit = TRUE)
+  new_rtmb <- predict(m_rtmb, newdata = newdata, se.fit = TRUE)
+  agg_rtmb <- predict(m_rtmb, aggregate = aggregate, se.fit = TRUE)
+  cov_rtmb <- predict(m_rtmb, newdata = newdata, se.fit = TRUE,
+                      cov.fit = TRUE)
+  lat_rtmb <- predict(m_rtmb, type = "latent", se.fit = TRUE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    family = poisson,
+    data = Salamanders,
+    se = FALSE
+  )
+  pred_tmb <- predict(m_tmb, se.fit = TRUE)
+  link_tmb <- predict(m_tmb, type = "link", se.fit = TRUE)
+  new_tmb <- predict(m_tmb, newdata = newdata, se.fit = TRUE)
+  agg_tmb <- predict(m_tmb, aggregate = aggregate, se.fit = TRUE)
+  cov_tmb <- predict(m_tmb, newdata = newdata, se.fit = TRUE,
+                     cov.fit = TRUE)
+  lat_tmb <- predict(m_tmb, type = "latent", se.fit = TRUE)
+
+  expect_equal(pred_rtmb$fit, pred_tmb$fit, tolerance = tol_fixef)
+  expect_equal(pred_rtmb$se.fit, pred_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(link_rtmb$fit, link_tmb$fit, tolerance = tol_fixef)
+  expect_equal(link_rtmb$se.fit, link_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(new_rtmb$fit, new_tmb$fit, tolerance = tol_fixef)
+  expect_equal(new_rtmb$se.fit, new_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(agg_rtmb$fit, agg_tmb$fit, tolerance = tol_fixef)
+  expect_equal(agg_rtmb$se.fit, agg_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(cov_rtmb$fit, cov_tmb$fit, tolerance = tol_fixef)
+  expect_equal(cov_rtmb$se.fit, cov_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(cov_rtmb$cov.fit, cov_tmb$cov.fit, tolerance = tol_fixef)
+  expect_equal(lat_rtmb$fit, lat_tmb$fit, tolerance = tol_fixef)
+  expect_equal(lat_rtmb$se.fit, lat_tmb$se.fit, tolerance = tol_fixef)
+})
+
+test_that("poisson: zero-inflated predict with standard errors", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    ziformula = ~ mined,
+    family = poisson,
+    data = Salamanders,
+    se = FALSE
+  )
+  resp_rtmb <- predict(m_rtmb, se.fit = TRUE)
+  cond_rtmb <- predict(m_rtmb, type = "conditional", se.fit = TRUE)
+  zprob_rtmb <- predict(m_rtmb, type = "zprob", se.fit = TRUE)
+  zlink_rtmb <- predict(m_rtmb, type = "zlink", se.fit = TRUE)
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    ziformula = ~ mined,
+    family = poisson,
+    data = Salamanders,
+    se = FALSE
+  )
+  resp_tmb <- predict(m_tmb, se.fit = TRUE)
+  cond_tmb <- predict(m_tmb, type = "conditional", se.fit = TRUE)
+  zprob_tmb <- predict(m_tmb, type = "zprob", se.fit = TRUE)
+  zlink_tmb <- predict(m_tmb, type = "zlink", se.fit = TRUE)
+
+  expect_equal(resp_rtmb$fit, resp_tmb$fit, tolerance = tol_fixef)
+  expect_equal(resp_rtmb$se.fit, resp_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(cond_rtmb$fit, cond_tmb$fit, tolerance = tol_fixef)
+  expect_equal(cond_rtmb$se.fit, cond_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(zprob_rtmb$fit, zprob_tmb$fit, tolerance = tol_fixef)
+  expect_equal(zprob_rtmb$se.fit, zprob_tmb$se.fit, tolerance = tol_fixef)
+  expect_equal(zlink_rtmb$fit, zlink_tmb$fit, tolerance = tol_fixef)
+  expect_equal(zlink_rtmb$se.fit, zlink_tmb$se.fit, tolerance = tol_fixef)
+})

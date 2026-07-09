@@ -9,6 +9,7 @@ MakeADFun <- function(data, ..., DLL) {
   }else {
     rtmb_fun <- cmb(rtmb_tpl, data)
     obj <- RTMB::MakeADFun(rtmb_fun, ...)
+    attr(data, "func") <- rtmb_fun
     obj$env$data <- data
     obj$env$rtmb_data_env <- environment(rtmb_fun)
     obj$env$report <- obj$report

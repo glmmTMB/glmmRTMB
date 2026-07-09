@@ -161,9 +161,6 @@ predict.glmmTMB <- function(object,
     se.fit <- TRUE
   }
   rtmb_fit <- !is.null(environment(object$obj$fn)$rtmb_data_env)
-  if (se.fit && rtmb_fit) {
-    stop("Prediction standard errors are not yet implemented for RTMB fits")
-  }
   
   if(is.null(aggregate)) {
     aggregate <- factor()
@@ -526,13 +523,19 @@ predict.glmmTMB <- function(object,
     pred <- rr[[return_par]]
   } else {
     H <- with(object,optimHess(oldPar,obj$fn,obj$gr))
+    sdreport_fun <- if (!is.null(newObj$env$rtmb_data_env)) {
+      RTMB::sdreport
+    } else {
+      sdreport
+    }
     ## FIXME: Eventually add 'getReportCovariance=FALSE' to this sdreport
     ##        call to fix memory issue (requires recent TMB version)
     ## Fixed! (but do we want a flag to get it ? ...)
     if (cov.fit) {
-      sdr <- sdreport(newObj,oldPar,hessian.fixed=H,getReportCovariance=TRUE)
+      sdr <- sdreport_fun(newObj,oldPar,hessian.fixed=H,
+                          getReportCovariance=TRUE)
       covfit <- sdr$cov
-    } else     sdr <- sdreport(newObj,oldPar,hessian.fixed=H,getReportCovariance=FALSE,bias.correct=do.bias.correct,bias.correct.control=bias.correct.control)
+    } else     sdr <- sdreport_fun(newObj,oldPar,hessian.fixed=H,getReportCovariance=FALSE,bias.correct=do.bias.correct,bias.correct.control=bias.correct.control)
 
     sdrsum <- summary(sdr, "report") ## TMB:::summary.sdreport(sdr, "report")
     ## split summary matrix by parameter name
