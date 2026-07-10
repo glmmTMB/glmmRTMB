@@ -1,5 +1,17 @@
 cmb <- function(f, d) function(p) f(p, d)
 
+osa_keep <- function(x) {
+  if (inherits(x, "osa")) {
+    as.vector(x@keep[, 1L])
+  } else {
+    rep(1, length(x))
+  }
+}
+
+osa_value <- function(x) {
+  if (inherits(x, "osa")) x@x else x
+}
+
 ## Wrap a density function with zero-inflation likelihood and simulation support
 dZI <- function(density) {
   force(density)
@@ -30,6 +42,7 @@ dZI <- function(density) {
       return(rep(0, length(x)))
     }
 
+    x <- osa_value(x)
     loglik <- density(x, ..., log = TRUE)
     if (is.null(zi)) {
       return(if (log) loglik else exp(loglik))
@@ -272,10 +285,11 @@ utils::globalVariables(c(
 ))
 
 rtmb_tpl <- function(parameters, data) {
-  ## Keep the original response for NA and structural-zero checks; OBS() may
-  ## replace yobs with a simulation reference
-  yobs_obs <- data$yobs
   RTMB::getAll(data, parameters)
+  ## Keep the original response for NA and structural-zero checks; OBS() may
+  ## replace yobs with a simulation or OSA reference. During OSA calculations
+  ## yobs is moved from data into parameters, so data$yobs may be absent.
+  yobs_obs <- if (!is.null(data$yobs)) data$yobs else osa_value(yobs)
   yobs <- RTMB::OBS(yobs)
 
   nll <- 0
@@ -337,17 +351,19 @@ rtmb_tpl <- function(parameters, data) {
   ## Observation likelihoods; adapted from glmmTMB.cpp:961-978,
   ## 1095-1101, and 1180-1199
   i <- !is.na(yobs_obs) | inherits(yobs, "simref")
+  yobs_i <- yobs[i]
+  keep <- osa_keep(yobs_i)
   zi <- if (has_zi) etazi[i] else NULL
 
   tmp_loglik <- switch(
     names(family),
-    poisson = dZI(RTMB::dpois)(yobs[i], lambda = mu[i], zi = zi, log = TRUE,
+    poisson = dZI(RTMB::dpois)(yobs_i, lambda = mu[i], zi = zi, log = TRUE,
                                is_zero = yobs_obs[i] == 0),
     truncated_poisson = dZI(dtruncated_poisson_rtmb)(
-      yobs[i], lambda = mu[i], zi = zi, log = TRUE,
+      yobs_i, lambda = mu[i], zi = zi, log = TRUE,
       is_zero = yobs_obs[i] == 0
     ),
-    gaussian = dZI(dnorm_tmb)(yobs[i], mean = mu[i], sd = phi[i], zi = zi,
+    gaussian = dZI(dnorm_tmb)(yobs_i, mean = mu[i], sd = phi[i], zi = zi,
                               log = TRUE, is_zero = yobs_obs[i] == 0),
     stop(
       "family not yet implemented: ", names(family),
@@ -355,7 +371,7 @@ rtmb_tpl <- function(parameters, data) {
     )
   )
 
-  nll <- nll - sum(weights[i] * tmp_loglik)
+  nll <- nll - sum(keep * weights[i] * tmp_loglik)
 
   ## Prior contribution; translated from glmmTMB.cpp:1203-1267
   nll <- nll + prior_nll(
