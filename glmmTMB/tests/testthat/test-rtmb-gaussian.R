@@ -1616,3 +1616,40 @@ test_that("gaussian: predict with standard errors", {
   expect_equal(disp_rtmb$fit, disp_tmb$fit, tolerance = tol_fixef)
   expect_equal(disp_rtmb$se.fit, disp_tmb$se.fit, tolerance = tol_fixef)
 })
+
+test_that("gaussian: fixed-effect priors", {
+  prior <- data.frame(
+    prior = "normal(0, 0.1)",
+    class = "fixef",
+    coef = "Days"
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    Reaction ~ Days,
+    family = gaussian,
+    data = sleepstudy,
+    priors = prior,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    Reaction ~ Days,
+    family = gaussian,
+    data = sleepstudy,
+    priors = prior,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+})

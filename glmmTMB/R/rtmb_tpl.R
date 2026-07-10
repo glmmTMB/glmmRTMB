@@ -143,6 +143,121 @@ linkfun_rtmb <- function(mu, link) {
   )
 }
 
+dcauchy_rtmb <- function(x, location, scale, log = FALSE) {
+  resid <- (x - location) / scale
+  ans <- -log(pi) - log(scale) - log1p(resid * resid)
+  if (log) ans else exp(ans)
+}
+
+dlkj_rtmb <- function(x, eta, log = FALSE) {
+  "[<-" <- RTMB::ADoverload("[<-")
+
+  len <- length(x)
+  if (len == 0) {
+    return(if (log) 0 else 1)
+  }
+
+  n <- (1 + sqrt(1 + 8 * len)) / 2
+  if (abs(n - round(n)) > sqrt(.Machine$double.eps)) {
+    stop("Invalid number of LKJ correlation parameters: ", len)
+  }
+  n <- as.integer(round(n))
+
+  L <- diag(n)
+  k <- 1L
+  for (i in seq_len(n)) {
+    for (j in seq_len(n)) {
+      if (i > j) {
+        L[i, j] <- x[k]
+        k <- k + 1L
+      }
+    }
+  }
+
+  row_sums <- L * L
+  log_det_x <- 0
+  for (i in seq_len(n)) {
+    log_det_x <- log_det_x - log(sum(row_sums[i, ]))
+  }
+  ans <- (eta - 1) * log_det_x
+  if (log) ans else exp(ans)
+}
+
+prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
+                      prior_distrib, prior_whichpar, prior_elstart,
+                      prior_elend, prior_npar, prior_params) {
+  nll <- 0
+  par_ind <- 1L
+
+  for (i in seq_along(prior_distrib)) {
+    parvec <- switch(
+      as.character(prior_whichpar[i]),
+      "0" = beta,
+      "1" = betazi,
+      "2" = betadisp,
+      "10" = theta,
+      "20" = thetazi,
+      "30" = psi,
+      stop("Unknown prior parameter vector code: ", prior_whichpar[i])
+    )
+
+    par_start <- prior_elstart[i] + 1L
+    par_end <- prior_elend[i] + 1L
+    if (par_start < 1L || par_end > length(parvec)) {
+      stop(
+        "Bad prior index for prior ", i, ": requested elements ",
+        prior_elstart[i], ":", prior_elend[i],
+        " in a parameter vector of length ", length(parvec)
+      )
+    }
+
+    if (prior_distrib[i] == .valid_prior[["lkj"]]) {
+      corpars <- parvec[par_start:par_end]
+      nll <- nll - dlkj_rtmb(
+        corpars,
+        prior_params[par_ind],
+        log = TRUE
+      )
+    } else {
+      for (j in par_start:par_end) {
+        parval <- parvec[j]
+        logpriorval <- switch(
+          as.character(prior_distrib[i]),
+          "0" = dnorm_tmb(
+            parval,
+            mean = prior_params[par_ind],
+            sd = prior_params[par_ind + 1L],
+            log = TRUE
+          ),
+          "1" = {
+            location <- prior_params[par_ind]
+            scale <- prior_params[par_ind + 1L]
+            df <- prior_params[par_ind + 2L]
+            RTMB::dt((parval - location) / scale, df = df, log = TRUE) -
+              log(scale)
+          },
+          "2" = dcauchy_rtmb(
+            parval,
+            location = prior_params[par_ind],
+            scale = prior_params[par_ind + 1L],
+            log = TRUE
+          ),
+          "10" = {
+            shape <- prior_params[par_ind + 1L]
+            scale <- prior_params[par_ind] / prior_params[par_ind + 1L]
+            RTMB::dgamma(exp(parval), shape = shape, scale = scale,
+                         log = TRUE)
+          },
+          stop("Prior distribution not implemented: ", prior_distrib[i])
+        )
+        nll <- nll - logpriorval
+      }
+    }
+    par_ind <- par_ind + prior_npar[i]
+  }
+  nll
+}
+
 ## Variables injected into rtmb_tpl() by RTMB::getAll()
 utils::globalVariables(c(
   "X", "XS", "Z", "offset", "terms", "family", "link", "weights",
@@ -151,7 +266,9 @@ utils::globalVariables(c(
   "betazi", "bzi", "thetazi",
   "Xdisp", "XdispS", "Zdisp", "dispoffset", "termsdisp",
   "betadisp", "bdisp", "thetadisp",
-  "ziPredictCode", "doPredict", "whichPredict", "aggregate"
+  "psi", "ziPredictCode", "doPredict", "whichPredict", "aggregate",
+  "prior_distrib", "prior_whichpar", "prior_elstart", "prior_elend",
+  "prior_npar", "prior_params"
 ))
 
 rtmb_tpl <- function(parameters, data) {
@@ -239,6 +356,22 @@ rtmb_tpl <- function(parameters, data) {
   )
 
   nll <- nll - sum(weights[i] * tmp_loglik)
+
+  ## Prior contribution; translated from glmmTMB.cpp:1203-1267
+  nll <- nll + prior_nll(
+    beta = beta,
+    betazi = betazi,
+    betadisp = betadisp,
+    theta = theta,
+    thetazi = thetazi,
+    psi = psi,
+    prior_distrib = prior_distrib,
+    prior_whichpar = prior_whichpar,
+    prior_elstart = prior_elstart,
+    prior_elend = prior_elend,
+    prior_npar = prior_npar,
+    prior_params = prior_params
+  )
 
   ## Prediction output; translated from glmmTMB.cpp:1353-1379
   mu_pred_all <- mu

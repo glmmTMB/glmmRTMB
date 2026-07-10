@@ -1300,3 +1300,84 @@ test_that("poisson: zero-inflated predict with standard errors", {
   expect_equal(zlink_rtmb$fit, zlink_tmb$fit, tolerance = tol_fixef)
   expect_equal(zlink_rtmb$se.fit, zlink_tmb$se.fit, tolerance = tol_fixef)
 })
+
+test_that("poisson: fixed-effect and random-effect priors", {
+  priors <- data.frame(
+    prior = c("normal(0, 0.1)", "gamma(1, 2.5)"),
+    class = c("fixef", "ranef"),
+    coef = c("minedno", "1|site")
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    family = poisson,
+    data = Salamanders,
+    priors = priors,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    family = poisson,
+    data = Salamanders,
+    priors = priors,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    getME(m_rtmb, "theta"),
+    getME(m_tmb, "theta"),
+    tolerance = tol_varcorr
+  )
+})
+
+test_that("poisson: zero-inflation fixed-effect priors", {
+  prior <- data.frame(
+    prior = "normal(0, 0.1)",
+    class = "fixef_zi",
+    coef = "minedno"
+  )
+
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    ziformula = ~ mined,
+    family = poisson,
+    data = Salamanders,
+    priors = prior,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    count ~ mined + (1 | site),
+    ziformula = ~ mined,
+    family = poisson,
+    data = Salamanders,
+    priors = prior,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$zi,
+    fixef(m_tmb)$zi,
+    tolerance = tol_fixef
+  )
+})
