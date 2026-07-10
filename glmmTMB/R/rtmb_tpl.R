@@ -12,34 +12,39 @@ osa_value <- function(x) {
   if (inherits(x, "osa")) x@x else x
 }
 
+## Simulate from a zero-inflated density wrapper.
+simZI <- function(density, x, ..., zi) {
+  prob_nonzero <- 1 / (1 + exp(zi))
+  if (inherits(prob_nonzero, "simref")) {
+    prob_nonzero <- prob_nonzero$value
+  }
+
+  nonzero <- as.logical(stats::rbinom(length(x), 1, prob_nonzero))
+  density_args <- list(...)
+  density_args <- lapply(density_args, function(arg) {
+    if (length(arg) == length(x)) arg[nonzero] else arg
+  })
+
+  if (any(nonzero)) {
+    do.call(
+      density,
+      c(list(x = x[nonzero]), density_args, list(log = TRUE))
+    )
+  }
+  if (any(!nonzero)) {
+    structural_zero <- x[!nonzero]
+    structural_zero[] <- 0
+  }
+  rep(0, length(x))
+}
+
 ## Wrap a density function with zero-inflation likelihood and simulation support
 dZI <- function(density) {
   force(density)
 
   function(x, ..., zi = NULL, log = FALSE, is_zero = NULL) {
     if (inherits(x, "simref") && !is.null(zi)) {
-      prob_nonzero <- 1 / (1 + exp(zi))
-      if (inherits(prob_nonzero, "simref")) {
-        prob_nonzero <- prob_nonzero$value
-      }
-
-      nonzero <- as.logical(stats::rbinom(length(x), 1, prob_nonzero))
-      density_args <- list(...)
-      density_args <- lapply(density_args, function(arg) {
-        if (length(arg) == length(x)) arg[nonzero] else arg
-      })
-
-      if (any(nonzero)) {
-        do.call(
-          density,
-          c(list(x = x[nonzero]), density_args, list(log = TRUE))
-        )
-      }
-      if (any(!nonzero)) {
-        structural_zero <- x[!nonzero]
-        structural_zero[] <- 0
-      }
-      return(rep(0, length(x)))
+      return(simZI(density, x, ..., zi = zi))
     }
 
     x <- osa_value(x)
