@@ -13,8 +13,8 @@ osa_value <- function(x) {
 }
 
 ## Simulate from a zero-inflated density wrapper.
-simZI <- function(density, x, ..., zi) {
-  prob_nonzero <- 1 / (1 + exp(zi))
+simZI <- function(density, x, ..., eta_zi) {
+  prob_nonzero <- 1 / (1 + exp(eta_zi))
   if (inherits(prob_nonzero, "simref")) {
     prob_nonzero <- prob_nonzero$value
   }
@@ -42,14 +42,14 @@ simZI <- function(density, x, ..., zi) {
 dZI <- function(density) {
   force(density)
 
-  function(x, ..., zi = NULL, log = FALSE, is_zero = NULL) {
-    if (inherits(x, "simref") && !is.null(zi)) {
-      return(simZI(density, x, ..., zi = zi))
+  function(x, ..., eta_zi = NULL, log = FALSE, is_zero = NULL) {
+    if (inherits(x, "simref") && !is.null(eta_zi)) {
+      return(simZI(density, x, ..., eta_zi = eta_zi))
     }
 
     x <- osa_value(x)
     loglik <- density(x, ..., log = TRUE)
-    if (is.null(zi)) {
+    if (is.null(eta_zi)) {
       return(if (log) loglik else exp(loglik))
     }
 
@@ -57,8 +57,8 @@ dZI <- function(density) {
       is_zero <- x == 0
     }
 
-    log_pz <- -RTMB::logspace_add(0, -zi)
-    log_1mpz <- -RTMB::logspace_add(0, zi)
+    log_pz <- -RTMB::logspace_add(0, -eta_zi)
+    log_1mpz <- -RTMB::logspace_add(0, eta_zi)
     ans <- log_1mpz + loglik
 
     if (any(is_zero)) {
@@ -358,17 +358,17 @@ rtmb_tpl <- function(parameters, data) {
   i <- !is.na(yobs_obs) | inherits(yobs, "simref")
   yobs_i <- yobs[i]
   keep <- osa_keep(yobs_i)
-  zi <- if (has_zi) etazi[i] else NULL
+  eta_zi <- if (has_zi) etazi[i] else NULL
 
   tmp_loglik <- switch(
     names(family),
-    poisson = dZI(RTMB::dpois)(yobs_i, lambda = mu[i], zi = zi, log = TRUE,
+    poisson = dZI(RTMB::dpois)(yobs_i, lambda = mu[i], eta_zi = eta_zi, log = TRUE,
                                is_zero = yobs_obs[i] == 0),
     truncated_poisson = dZI(dtruncated_poisson_rtmb)(
-      yobs_i, lambda = mu[i], zi = zi, log = TRUE,
+      yobs_i, lambda = mu[i], eta_zi = eta_zi, log = TRUE,
       is_zero = yobs_obs[i] == 0
     ),
-    gaussian = dZI(dnorm_tmb)(yobs_i, mean = mu[i], sd = phi[i], zi = zi,
+    gaussian = dZI(dnorm_tmb)(yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
                               log = TRUE, is_zero = yobs_obs[i] == 0),
     stop(
       "family not yet implemented: ", names(family),
