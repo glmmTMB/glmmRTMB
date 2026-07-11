@@ -41,6 +41,35 @@ logit_inverse_linkfun_rtmb <- function(eta, link) {
   )
 }
 
+## Translated from log_inverse_linkfun(), glmmTMB.cpp:234-249.
+## Negative-binomial likelihoods use log(mu) for robust density evaluation.
+log_inverse_linkfun_rtmb <- function(eta, link) {
+  switch(
+    names(link),
+    log = eta,
+    logit = -RTMB::logspace_add(0, -eta),
+    {
+      mu <- switch(
+        names(link),
+        probit = {
+          probit_eta <- if (inherits(eta, "simref")) eta$value else eta
+          if (inherits(probit_eta, "Matrix")) {
+            probit_eta <- as.matrix(probit_eta)
+          }
+          RTMB::pnorm(probit_eta)
+        },
+        cloglog = 1 - exp(-exp(eta)),
+        identity = eta,
+        sqrt = eta * eta,
+        inverse = 1 / eta,
+        lambertW = exp(eta) * exp(exp(eta)),
+        stop("link not yet implemented for log inverse-link: ", names(link))
+      )
+      log(mu)
+    }
+  )
+}
+
 #' Simulate from a zero-inflated density wrapper
 #'
 #' This helper implements the simulation branch used by [dZI()].  The
@@ -194,6 +223,32 @@ dbinom_robust_rtmb <- function(x, size, logit_p, log = FALSE) {
     return(RTMB::dbinom(x, size = size, prob = prob, log = log))
   }
   RTMB::dbinom_robust(x, size = size, logit_p = logit_p, log = log)
+}
+
+## Fitting translates glmmTMB.cpp:1066-1075 for nbinom2_family:
+## log_mu = log(mu), log_var_minus_mu = log(mu^2 / phi). Simulation follows
+## the same mean/variance by converting back to RTMB::dnbinom(size, mu).
+dnbinom2_robust_rtmb <- function(x, log_mu, log_var_minus_mu, log = FALSE) {
+  if (inherits(x, "simref")) {
+    if (inherits(log_mu, "simref")) {
+      log_mu <- log_mu$value
+    }
+    if (inherits(log_var_minus_mu, "simref")) {
+      log_var_minus_mu <- log_var_minus_mu$value
+    }
+    if (inherits(log_mu, "Matrix")) {
+      log_mu <- as.matrix(log_mu)
+    }
+    if (inherits(log_var_minus_mu, "Matrix")) {
+      log_var_minus_mu <- as.matrix(log_var_minus_mu)
+    }
+    mu <- exp(as.vector(log_mu))
+    size <- exp(as.vector(2 * log_mu - log_var_minus_mu))
+    x[] <- stats::rnbinom(length(x), size = size, mu = mu)
+    return(rep(0, length(x)))
+  }
+  RTMB::dnbinom_robust(x, log_mu = log_mu, log_var_minus_mu = log_var_minus_mu,
+                       log = log)
 }
 
 ## zero-truncated poisson density
@@ -457,6 +512,16 @@ rtmb_tpl <- function(parameters, data) {
   } else {
     NULL
   }
+  log_mu <- if (names(family) == "nbinom2") {
+    log_inverse_linkfun_rtmb(eta, link)
+  } else {
+    NULL
+  }
+  log_var_minus_mu <- if (names(family) == "nbinom2") {
+    2 * log_mu - etadisp
+  } else {
+    NULL
+  }
 
   tmp_loglik <- switch(
     names(family),
@@ -472,9 +537,14 @@ rtmb_tpl <- function(parameters, data) {
     binomial = dZI(dbinom_robust_rtmb)(
       yobs_i, size = size[i], logit_p = logit_mu[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from the nbinom2_family case in glmmTMB.cpp:1066-1075.
+    nbinom2 = dZI(dnbinom2_robust_rtmb)(
+      yobs_i, log_mu = log_mu[i], log_var_minus_mu = log_var_minus_mu[i],
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0),
     stop(
       "family not yet implemented: ", names(family),
-      "; implemented families are: poisson, truncated_poisson, gaussian, binomial"
+      "; implemented families are: poisson, truncated_poisson, gaussian, ",
+      "binomial, nbinom2"
     )
   )
 
