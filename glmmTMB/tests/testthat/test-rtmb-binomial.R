@@ -22,6 +22,23 @@ binom_dat <- data.frame(
   g = factor(rep(seq_len(24), each = 5))
 )
 
+set.seed(302)
+zi_binom_dat <- expand.grid(
+  obs = seq_len(4),
+  g = factor(seq_len(20))
+)
+zi_binom_dat$x <- rnorm(nrow(zi_binom_dat))
+zi_binom_dat$size <- 10
+zi_effect <- rnorm(nlevels(zi_binom_dat$g), sd = 0.5)
+zi_prob <- plogis(-1.2 + zi_effect[zi_binom_dat$g])
+cond_prob <- plogis(-0.4 + 0.3 * zi_binom_dat$x)
+is_structural_zero <- rbinom(nrow(zi_binom_dat), size = 1, prob = zi_prob)
+zi_binom_dat$y <- ifelse(
+  is_structural_zero == 1,
+  0,
+  rbinom(nrow(zi_binom_dat), size = zi_binom_dat$size, prob = cond_prob)
+)
+
 test_that("binomial: binary response with fixed effects", {
   glmmTMB:::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
@@ -209,6 +226,49 @@ test_that("binomial: zero-inflation fixed effects", {
     fixef(m_rtmb)$zi,
     fixef(m_tmb)$zi,
     tolerance = tol_fixef
+  )
+})
+
+test_that("binomial: zero-inflation random effects", {
+  glmmTMB:::useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    y / size ~ x,
+    ziformula = ~ 1 + (1 | g),
+    weights = size,
+    family = binomial,
+    data = zi_binom_dat,
+    se = FALSE
+  )
+
+  glmmTMB:::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    y / size ~ x,
+    ziformula = ~ 1 + (1 | g),
+    weights = size,
+    family = binomial,
+    data = zi_binom_dat,
+    se = FALSE
+  )
+
+  expect_equal(
+    as.numeric(logLik(m_rtmb)),
+    as.numeric(logLik(m_tmb)),
+    tolerance = tol_logLik
+  )
+  expect_equal(
+    fixef(m_rtmb)$cond,
+    fixef(m_tmb)$cond,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    fixef(m_rtmb)$zi,
+    fixef(m_tmb)$zi,
+    tolerance = tol_fixef
+  )
+  expect_equal(
+    as.numeric(VarCorr(m_rtmb)$zi$g),
+    as.numeric(VarCorr(m_tmb)$zi$g),
+    tolerance = tol_varcorr
   )
 })
 
