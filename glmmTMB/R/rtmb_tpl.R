@@ -12,7 +12,30 @@ osa_value <- function(x) {
   if (inherits(x, "osa")) x@x else x
 }
 
-## Simulate from a zero-inflated density wrapper.
+#' Simulate from a zero-inflated density wrapper
+#'
+#' This helper implements the simulation branch used by [dZI()].  The
+#' zero-inflation predictor `eta_zi` is on the logit scale, so the structural
+#' zero probability is `p_zi = 1 / (1 + exp(-eta_zi))` and the complementary
+#' conditional probability is `1 - p_zi = 1 / (1 + exp(eta_zi))`.  Simulated
+#' values therefore come from the same mixture represented in the likelihood:
+#' either the structural-zero component returns zero, or the wrapped
+#' conditional density simulates the response.  Keeping this logic outside
+#' [dZI()] makes the likelihood code easier to read and preserves RTMB's
+#' convention that simulation is triggered by evaluating log-density functions
+#' on `simref` objects.
+#'
+#' @param density A log-density function such as `RTMB::dpois()` or
+#'   `dnorm_tmb()` that also supports RTMB simulation through `simref` objects.
+#' @param x The response vector, normally an RTMB `simref` object during
+#'   simulation.
+#' @param ... Distribution-specific arguments passed to `density`.
+#' @param eta_zi Zero-inflation linear predictor on the logit scale.
+#'
+#' @return A zero vector on the log-density scale, after mutating the `simref`
+#'   response object with simulated values.
+#'
+#' @noRd
 simZI <- function(density, x, ..., eta_zi) {
   prob_nonzero <- 1 / (1 + exp(eta_zi))
   if (inherits(prob_nonzero, "simref")) {
@@ -38,7 +61,29 @@ simZI <- function(density, x, ..., eta_zi) {
   rep(0, length(x))
 }
 
-## Wrap a density function with zero-inflation likelihood and simulation support
+#' Add zero inflation to a density function
+#'
+#' `dZI()` takes an ordinary density function and
+#' returns a new density function with glmmTMB-style zero-inflation behavior.
+#' When `eta_zi` is `NULL`, the wrapper deliberately reduces to the original
+#' density, so non-zero-inflated models use the same likelihood path.  When
+#' `eta_zi` is supplied, the likelihood is the standard zero-inflated mixture.
+#' A nonzero observation can only come from the conditional distribution, so it
+#' contributes `log(1 - p_zi) + log f(y)`.  An observed zero can come either
+#' from the structural-zero component or from the conditional distribution, so
+#' it contributes `log(p_zi + (1 - p_zi) * f(0))`.  The wrapper evaluates these
+#' terms on the log scale, using `RTMB::logspace_add()` for the zero case so
+#' the two possible zero sources are combined stably.  The separate `is_zero`
+#' argument tells the wrapper which observations should use the zero-mixture
+#' formula; this is especially important for truncated or hurdle-like families
+#' where the conditional density should not be evaluated at zero.
+#'
+#' @param density A log-density function to wrap.
+#'
+#' @return A function with the same distribution-specific arguments as
+#'   `density`, plus `eta_zi`, `log`, and `is_zero`.
+#'
+#' @noRd
 dZI <- function(density) {
   force(density)
 
@@ -48,20 +93,22 @@ dZI <- function(density) {
     }
 
     x <- osa_value(x)
-    loglik <- density(x, ..., log = TRUE)
     if (is.null(eta_zi)) {
+      loglik <- density(x, ..., log = TRUE)
       return(if (log) loglik else exp(loglik))
     }
 
     if (is.null(is_zero)) {
       is_zero <- x == 0
     }
+    has_zero <- any(is_zero)
 
-    log_pz <- -RTMB::logspace_add(0, -eta_zi)
+    loglik <- density(x, ..., log = TRUE)
     log_1mpz <- -RTMB::logspace_add(0, eta_zi)
     ans <- log_1mpz + loglik
 
-    if (any(is_zero)) {
+    if (has_zero) {
+      log_pz <- -RTMB::logspace_add(0, -eta_zi)
       ans[is_zero] <- RTMB::logspace_add(
         log_pz[is_zero],
         ans[is_zero]
