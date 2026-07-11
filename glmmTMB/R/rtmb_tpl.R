@@ -12,6 +12,35 @@ osa_value <- function(x) {
   if (inherits(x, "osa")) x@x else x
 }
 
+## Translated from logit_inverse_linkfun(), glmmTMB.cpp:213-232.
+## The binomial likelihood uses logit(probability), not necessarily eta.
+logit_inverse_linkfun_rtmb <- function(eta, link) {
+  switch(
+    names(link),
+    logit = eta,
+    {
+      mu <- switch(
+        names(link),
+        probit = {
+          probit_eta <- if (inherits(eta, "simref")) eta$value else eta
+          if (inherits(probit_eta, "Matrix")) {
+            probit_eta <- as.matrix(probit_eta)
+          }
+          RTMB::pnorm(probit_eta)
+        },
+        cloglog = 1 - exp(-exp(eta)),
+        log = exp(eta),
+        identity = eta,
+        sqrt = eta * eta,
+        inverse = 1 / eta,
+        lambertW = exp(eta) * exp(exp(eta)),
+        stop("link not yet implemented for binomial: ", names(link))
+      )
+      log(mu) - log(1 - mu)
+    }
+  )
+}
+
 #' Simulate from a zero-inflated density wrapper
 #'
 #' This helper implements the simulation branch used by [dZI()].  The
@@ -149,6 +178,23 @@ dnorm_tmb <- local({
     if (log) ans else exp(ans)
   }
 })
+
+## Fitting uses RTMB::dbinom_robust() to match glmmTMB.cpp:981.
+## Simulation follows glmmTMB.cpp:982 but delegates to RTMB::dbinom(),
+## because RTMB::dbinom_robust() does not provide rbinom_robust().
+dbinom_robust_rtmb <- function(x, size, logit_p, log = FALSE) {
+  if (inherits(x, "simref")) {
+    prob <- 1 / (1 + exp(-logit_p))
+    if (inherits(size, "simref")) {
+      size <- size$value
+    }
+    if (inherits(prob, "simref")) {
+      prob <- prob$value
+    }
+    return(RTMB::dbinom(x, size = size, prob = prob, log = log))
+  }
+  RTMB::dbinom_robust(x, size = size, logit_p = logit_p, log = log)
+}
 
 ## zero-truncated poisson density
 dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
@@ -325,7 +371,7 @@ prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
 
 ## Variables injected into rtmb_tpl() by RTMB::getAll()
 utils::globalVariables(c(
-  "X", "XS", "Z", "offset", "terms", "family", "link", "weights",
+  "X", "XS", "Z", "offset", "terms", "family", "link", "weights", "size",
   "beta", "b", "theta",
   "Xzi", "XziS", "Zzi", "zioffset", "termszi",
   "betazi", "bzi", "thetazi",
@@ -406,6 +452,11 @@ rtmb_tpl <- function(parameters, data) {
   yobs_i <- yobs[i]
   keep <- osa_keep(yobs_i)
   eta_zi <- if (has_zi) etazi[i] else NULL
+  logit_mu <- if (names(family) == "binomial") {
+    logit_inverse_linkfun_rtmb(eta, link)
+  } else {
+    NULL
+  }
 
   tmp_loglik <- switch(
     names(family),
@@ -417,9 +468,13 @@ rtmb_tpl <- function(parameters, data) {
     ),
     gaussian = dZI(dnorm_tmb)(yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
                               log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
+    binomial = dZI(dbinom_robust_rtmb)(
+      yobs_i, size = size[i], logit_p = logit_mu[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0),
     stop(
       "family not yet implemented: ", names(family),
-      "; implemented families are: poisson, truncated_poisson, gaussian"
+      "; implemented families are: poisson, truncated_poisson, gaussian, binomial"
     )
   )
 
