@@ -225,10 +225,10 @@ dbinom_robust_rtmb <- function(x, size, logit_p, log = FALSE) {
   RTMB::dbinom_robust(x, size = size, logit_p = logit_p, log = log)
 }
 
-## Fitting translates glmmTMB.cpp:1066-1075 for nbinom2_family:
-## log_mu = log(mu), log_var_minus_mu = log(mu^2 / phi). Simulation follows
-## the same mean/variance by converting back to RTMB::dnbinom(size, mu).
-dnbinom2_robust_rtmb <- function(x, log_mu, log_var_minus_mu, log = FALSE) {
+## Fitting translates glmmTMB.cpp:1042-1075 for nbinom1/nbinom2:
+## both families use dnbinom_robust(log_mu, log_var_minus_mu). Simulation
+## follows the same mean/variance by converting back to size/mu.
+dnbinom_robust_rtmb <- function(x, log_mu, log_var_minus_mu, log = FALSE) {
   if (inherits(x, "simref")) {
     if (inherits(log_mu, "simref")) {
       log_mu <- log_mu$value
@@ -512,16 +512,17 @@ rtmb_tpl <- function(parameters, data) {
   } else {
     NULL
   }
-  log_mu <- if (names(family) == "nbinom2") {
+  log_mu <- if (names(family) %in% c("nbinom1", "nbinom2")) {
     log_inverse_linkfun_rtmb(eta, link)
   } else {
     NULL
   }
-  log_var_minus_mu <- if (names(family) == "nbinom2") {
-    2 * log_mu - etadisp
-  } else {
+  log_var_minus_mu <- switch(
+    names(family),
+    nbinom1 = log_mu + etadisp,
+    nbinom2 = 2 * log_mu - etadisp,
     NULL
-  }
+  )
 
   tmp_loglik <- switch(
     names(family),
@@ -537,14 +538,18 @@ rtmb_tpl <- function(parameters, data) {
     binomial = dZI(dbinom_robust_rtmb)(
       yobs_i, size = size[i], logit_p = logit_mu[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from the nbinom1_family case in glmmTMB.cpp:1042-1056.
+    nbinom1 = dZI(dnbinom_robust_rtmb)(
+      yobs_i, log_mu = log_mu[i], log_var_minus_mu = log_var_minus_mu[i],
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0),
     ## Translated from the nbinom2_family case in glmmTMB.cpp:1066-1075.
-    nbinom2 = dZI(dnbinom2_robust_rtmb)(
+    nbinom2 = dZI(dnbinom_robust_rtmb)(
       yobs_i, log_mu = log_mu[i], log_var_minus_mu = log_var_minus_mu[i],
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0),
     stop(
       "family not yet implemented: ", names(family),
       "; implemented families are: poisson, truncated_poisson, gaussian, ",
-      "binomial, nbinom2"
+      "binomial, nbinom1, nbinom2"
     )
   )
 
