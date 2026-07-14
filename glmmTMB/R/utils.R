@@ -4,10 +4,18 @@ useRTMB <- local({
   function(flag = NULL) { useRTMB <<- flag %||% useRTMB ; useRTMB }
 })
 MakeADFun <- function(data, ..., DLL) {
-  if (!useRTMB())
+  if (!useRTMB()) {
     TMB::MakeADFun(data=data, ..., DLL=DLL)
-  else
-    RTMB::MakeADFun(cmb(rtmb_tpl, data), ...)
+  }else {
+    rtmb_fun <- cmb(rtmb_tpl, data)
+    obj <- RTMB::MakeADFun(rtmb_fun, ...)
+    attr(data, "func") <- rtmb_fun
+    obj$env$data <- data
+    obj$env$rtmb_data_env <- environment(rtmb_fun)
+    obj$env$report <- obj$report
+    obj
+    #RTMB::MakeADFun(cmb(rtmb_tpl, data), ...)
+  }
 }
 
 ## backward compat (copied from lme4)
@@ -770,6 +778,9 @@ set_simcodes <- function(g, val = "zero", terms = "ALL") {
         for (i in seq_along(ee$data$terms)) {
             ee$data$terms[[i]]$simCode <- .valid_simcode[[val]]
         }
+    }
+    if (!is.null(ee$rtmb_data_env)) {
+        ee$rtmb_data_env$d <- ee$data
     }
 
 }

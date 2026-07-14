@@ -508,4 +508,3 @@ bell <- function(link="log") {
     ##              )
     return(make_family(r, link, needs_nonneg = TRUE, needs_int = TRUE))
 }
-

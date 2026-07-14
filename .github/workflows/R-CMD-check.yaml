@@ -13,6 +13,8 @@ on:
       - main
       - master
       - github_actions
+      - rtmb-gaussian
+      - rtmb-poisson
   pull_request:
     branches:
       - main

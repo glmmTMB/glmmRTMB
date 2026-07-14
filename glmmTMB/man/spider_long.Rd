@@ -8,7 +8,7 @@
 An object of class \code{data.frame} with 336 rows and 9 columns.
 }
 \usage{
-spider_long
+data(spider_long)
 }
 \description{
 data from spider2 directory, CANOCO FORTRAN package, with trait

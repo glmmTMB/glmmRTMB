@@ -48,6 +48,7 @@ has.intercept.glmmTMB <- function (model, component="cond", ...) {
 ## n.b. rawNamespace spec must now be on a single line!
 
 ##' @rdname downstream_methods
+##' @exportS3Method NULL
 ##' @rawNamespace if(getRversion() >= "3.6.0") { S3method(car::Anova, glmmTMB) } else { export(Anova.glmmTMB) }
 ##' @param vcov. variance-covariance matrix (usually extracted automatically)
 ##' @param test.statistic unused: only valid choice is "Chisq" (i.e., Wald chi-squared test)
@@ -113,6 +114,7 @@ linearHypothesis_glmmTMB <- function (model, hypothesis.matrix,
              ...)
 }                  
     
+##' @exportS3Method NULL
 Anova.II.glmmTMB <- function(mod, vcov., singular.ok=TRUE, test="Chisq",
                              component="cond", include.rankdef.cols = FALSE, ...){
 
@@ -182,6 +184,7 @@ Anova.II.glmmTMB <- function(mod, vcov., singular.ok=TRUE, test="Chisq",
     return(result)
 }
 
+##' @exportS3Method NULL
 Anova.III.glmmTMB <- function(mod, vcov., singular.ok=FALSE, test="Chisq",
                               component="cond", include.rankdef.cols = include.rankdef.cols, ...){
     intercept <- has.intercept(mod)
