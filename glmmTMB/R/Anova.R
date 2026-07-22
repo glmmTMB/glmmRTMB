@@ -220,15 +220,7 @@ Anova.III.glmmTMB <- function(mod, vcov., singular.ok=FALSE, test="Chisq",
         hyp.matrix <- I.p[subs,,drop=FALSE]
         hyp.matrix <- hyp.matrix[, not.aliased, drop=FALSE]
         hyp.matrix <- hyp.matrix[!apply(hyp.matrix, 1, function(x) all(x == 0)), , drop=FALSE]
-        ## hypothesis rows involving only map-fixed coefficients (known
-        ## constants, zero variance) are untestable; drop them so the
-        ## term gets an NA row instead of a singular-matrix error
-        zv <- diag(vcov.) == 0
-        if (any(zv) && nrow(hyp.matrix) > 0) {
-            hyp.matrix <- hyp.matrix[!apply(hyp.matrix, 1,
-                                            function(x) all(x[!zv] == 0)), ,
-                                     drop=FALSE]
-        }
+        zv <- !is.na(diag(vcov.)) & diag(vcov.) == 0
         if (nrow(hyp.matrix) == 0){
             teststat[term] <- NA
             df[term] <- 0
