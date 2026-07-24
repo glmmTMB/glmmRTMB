@@ -63,6 +63,21 @@ test_that("car::Anova works with a mapped fixed-effect coefficient", {
     expect_error(suppressWarnings(car::Anova(fit_map, vcov. = Vred)))
 })
 
+test_that("car::Anova tolerates a user-supplied vcov with NA variances", {
+    skip_if_not_installed("car")
+    ## a full-size vcov (include_nonest = TRUE) keeps NA rows/cols for the
+    ## mapped coefficient. Supplied verbatim, diag(vcov.) == 0 is NA, which
+    ## previously made any(zv) return NA and errored the type II/III filters
+    ## ("missing value where TRUE/FALSE needed"). It should now run and,
+    ## since the matrix is used verbatim, propagate NA rather than crashing.
+    Vfull <- vcov(fit_map, include_nonest = TRUE)$cond
+    expect_true(anyNA(diag(Vfull)))
+    a2 <- expect_no_error(car::Anova(fit_map, vcov. = Vfull))
+    a3 <- expect_no_error(car::Anova(fit_map, type = 3, vcov. = Vfull))
+    expect_true(all(is.na(a2[["Chisq"]])))
+    expect_true(all(is.na(a3[["Chisq"]])))
+})
+
 test_that("mapping a non-intercept coefficient also works", {
     skip_if_not_installed("car")
     fit_map2 <- glmmTMB(count ~ mined + spp, family = poisson,
