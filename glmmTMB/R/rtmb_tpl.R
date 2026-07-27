@@ -403,6 +403,18 @@ linkfun_rtmb <- function(mu, link) {
   )
 }
 
+family_name_rtmb <- function(family) {
+  if (is.list(family) && !is.null(family$family)) {
+    return(family$family)
+  }
+
+  family_name <- names(family)
+  if (length(family_name) == 0L) {
+    family_name <- names(.valid_family)[match(family, .valid_family)]
+  }
+  family_name
+}
+
 dcauchy_rtmb <- function(x, location, scale, log = FALSE) {
   resid <- (x - location) / scale
   ans <- -log(pi) - log(scale) - log1p(resid * resid)
@@ -533,6 +545,7 @@ utils::globalVariables(c(
 
 rtmb_tpl <- function(parameters, data) {
   RTMB::getAll(data, parameters)
+  family_name <- family_name_rtmb(family)
   ## Keep the original response for NA and structural-zero checks; OBS() may
   ## replace yobs with a simulation or OSA reference. During OSA calculations
   ## yobs is moved from data into parameters, so data$yobs may be absent.
@@ -601,20 +614,20 @@ rtmb_tpl <- function(parameters, data) {
   yobs_i <- yobs[i]
   keep <- osa_keep(yobs_i)
   eta_zi <- if (has_zi) etazi[i] else NULL
-  logit_mu <- if (names(family) == "binomial") {
+  logit_mu <- if (family_name == "binomial") {
     logit_inverse_linkfun_rtmb(eta, link)
   } else {
     NULL
   }
   log_mu <- if (
-    names(family) %in% c("nbinom1", "nbinom2", "truncated_nbinom2")
+    family_name %in% c("nbinom1", "nbinom2", "truncated_nbinom2")
   ) {
     log_inverse_linkfun_rtmb(eta, link)
   } else {
     NULL
   }
   log_var_minus_mu <- switch(
-    names(family),
+    family_name,
     nbinom1 = log_mu + etadisp,
     nbinom2 = 2 * log_mu - etadisp,
     truncated_nbinom2 = 2 * log_mu - etadisp,
@@ -622,7 +635,7 @@ rtmb_tpl <- function(parameters, data) {
   )
 
   tmp_loglik <- switch(
-    names(family),
+    family_name,
     poisson = dZI(RTMB::dpois)(yobs_i, lambda = mu[i], eta_zi = eta_zi, log = TRUE,
                                is_zero = yobs_obs[i] == 0),
     truncated_poisson = dZI(dtruncated_poisson_rtmb)(
@@ -649,9 +662,8 @@ rtmb_tpl <- function(parameters, data) {
       log_size = etadisp[i], eta_zi = eta_zi, log = TRUE,
       is_zero = yobs_obs[i] == 0),
     stop(
-      "family not yet implemented: ", names(family),
-      "; implemented families are: poisson, truncated_poisson, gaussian, ",
-      "binomial, nbinom1, nbinom2, truncated_nbinom2"
+      "distribution not implemented yet for use with RTMB backend: ",
+      family_name
     )
   )
 
@@ -679,11 +691,11 @@ rtmb_tpl <- function(parameters, data) {
 
   ## Convert untruncated mean to the conditional mean of truncated distribution
   ## translated from glmmTMB.cpp:1331-1334
-  if (names(family) == "truncated_poisson") {
+  if (family_name == "truncated_poisson") {
     mu_vector <- mu[seq_along(mu)]
     log_nzprob_pred <- log_nzprob_truncated_poisson_rtmb(mu_vector)
     mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
-  } else if (names(family) == "truncated_nbinom2") {
+  } else if (family_name == "truncated_nbinom2") {
     log_mu_vector <- log_mu[seq_along(log_mu)]
     etadisp_vector <- etadisp[seq_along(etadisp)]
     log_nzprob_pred <- log_nzprob_truncated_nbinom2_rtmb(
