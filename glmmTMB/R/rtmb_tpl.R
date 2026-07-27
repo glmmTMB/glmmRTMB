@@ -251,6 +251,100 @@ dnbinom_robust_rtmb <- function(x, log_mu, log_var_minus_mu, log = FALSE) {
                        log = log)
 }
 
+## translation of glmmtmb::rtruncated_nbinom(); distrib.h:130-168
+rtruncated_nbinom_rtmb <- function(n, size, k = 0L, mu) {
+  ans <- numeric(n)
+  size <- rep(size, length.out = n)
+  mu <- rep(mu, length.out = n)
+
+  for (i in seq_len(n)) {
+    if (size[i] <= 0) {
+      stop("non-positive size in k-truncated-neg-bin simulator")
+    }
+    if (mu[i] <= 0) {
+      stop("non-positive mu in k-truncated-neg-bin simulator")
+    }
+    if (k < 0) {
+      stop("negative k in k-truncated-neg-bin simulator")
+    }
+
+    p <- size[i] / (mu[i] + size[i])
+    q <- mu[i] / (mu[i] + size[i])
+    m <- ceiling(max((k + 1) * p - size[i] * q, 0))
+
+    repeat {
+      x <- stats::rnbinom(1L, size = size[i] + m, prob = p) + m
+      if (m > 0) {
+        a <- 1
+        u <- stats::runif(1L)
+        for (j in seq_len(m)) {
+          a <- a * (k + 2 - j) / (x - j + 1)
+        }
+        if (u < a && x > k) {
+          break
+        }
+      } else if (x > k) {
+        break
+      }
+    }
+    ans[i] <- x
+  }
+  ans
+}
+
+## Scalar formulas vectorized to mirror the observation loop in
+## calc_log_nzprob(), glmmTMB.cpp:270-290
+log_nzprob_truncated_poisson_rtmb <- RTMB::Vectorize(
+  function(mu) RTMB::logspace_sub(0, -mu),
+  vectorize.args = "mu"
+)
+
+log_nzprob_truncated_nbinom2_rtmb <- RTMB::Vectorize(
+  function(log_mu, log_size) {
+    log_ratio_plus_one <- RTMB::logspace_add(0, log_mu - log_size)
+    RTMB::logspace_sub(0, -exp(log_size) * log_ratio_plus_one)
+  },
+  vectorize.args = c("log_mu", "log_size")
+)
+
+## Translated from calc_log_nzprob() and the truncated_nbinom2_family
+## likelihood case, glmmTMB.cpp:278-283 and 1066-1081
+dtruncated_nbinom2_rtmb <- function(x, log_mu, log_var_minus_mu, log_size,
+                                    log = FALSE) {
+  if (inherits(x, "simref")) {
+    sim_log_mu <- if (inherits(log_mu, "simref")) log_mu$value else log_mu
+    sim_log_size <- if (inherits(log_size, "simref")) {
+      log_size$value
+    } else {
+      log_size
+    }
+    if (inherits(sim_log_mu, "Matrix")) {
+      sim_log_mu <- as.matrix(sim_log_mu)
+    }
+    if (inherits(sim_log_size, "Matrix")) {
+      sim_log_size <- as.matrix(sim_log_size)
+    }
+    x[] <- rtruncated_nbinom_rtmb(
+      length(x),
+      size = exp(as.vector(sim_log_size)),
+      k = 0L,
+      mu = exp(as.vector(sim_log_mu))
+    )
+    return(rep(0, length(x)))
+  }
+
+  log_nzprob <- log_nzprob_truncated_nbinom2_rtmb(log_mu, log_size)
+  ans <- RTMB::dnbinom_robust(x, log_mu = log_mu,
+                              log_var_minus_mu = log_var_minus_mu,
+                              log = TRUE) - log_nzprob
+
+  is_zero <- x < 0.001
+  if (any(is_zero)) {
+    ans[is_zero] <- -Inf
+  }
+  if (log) ans else exp(ans)
+}
+
 ## zero-truncated poisson density
 dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
   if (inherits(x, "simref")) {
@@ -512,7 +606,9 @@ rtmb_tpl <- function(parameters, data) {
   } else {
     NULL
   }
-  log_mu <- if (names(family) %in% c("nbinom1", "nbinom2")) {
+  log_mu <- if (
+    names(family) %in% c("nbinom1", "nbinom2", "truncated_nbinom2")
+  ) {
     log_inverse_linkfun_rtmb(eta, link)
   } else {
     NULL
@@ -521,6 +617,7 @@ rtmb_tpl <- function(parameters, data) {
     names(family),
     nbinom1 = log_mu + etadisp,
     nbinom2 = 2 * log_mu - etadisp,
+    truncated_nbinom2 = 2 * log_mu - etadisp,
     NULL
   )
 
@@ -546,10 +643,15 @@ rtmb_tpl <- function(parameters, data) {
     nbinom2 = dZI(dnbinom_robust_rtmb)(
       yobs_i, log_mu = log_mu[i], log_var_minus_mu = log_var_minus_mu[i],
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from truncated_nbinom2_family, glmmTMB.cpp:1066-1081.
+    truncated_nbinom2 = dZI(dtruncated_nbinom2_rtmb)(
+      yobs_i, log_mu = log_mu[i], log_var_minus_mu = log_var_minus_mu[i],
+      log_size = etadisp[i], eta_zi = eta_zi, log = TRUE,
+      is_zero = yobs_obs[i] == 0),
     stop(
       "family not yet implemented: ", names(family),
       "; implemented families are: poisson, truncated_poisson, gaussian, ",
-      "binomial, nbinom1, nbinom2"
+      "binomial, nbinom1, nbinom2, truncated_nbinom2"
     )
   )
 
@@ -574,6 +676,22 @@ rtmb_tpl <- function(parameters, data) {
   ## Prediction output; translated from glmmTMB.cpp:1353-1379
   mu_pred_all <- mu
   eta_pred_all <- eta
+
+  ## Convert untruncated mean to the conditional mean of truncated distribution
+  ## translated from glmmTMB.cpp:1331-1334
+  if (names(family) == "truncated_poisson") {
+    mu_vector <- mu[seq_along(mu)]
+    log_nzprob_pred <- log_nzprob_truncated_poisson_rtmb(mu_vector)
+    mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
+  } else if (names(family) == "truncated_nbinom2") {
+    log_mu_vector <- log_mu[seq_along(log_mu)]
+    etadisp_vector <- etadisp[seq_along(etadisp)]
+    log_nzprob_pred <- log_nzprob_truncated_nbinom2_rtmb(
+      log_mu_vector,
+      etadisp_vector
+    )
+    mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
+  }
 
   if (has_zi || ziPredictCode == .valid_zipredictcode[["prob"]]) {
     zi_pred <- apply_zi_prediction(
