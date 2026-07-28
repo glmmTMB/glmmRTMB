@@ -1,4 +1,8 @@
 ## TMB/RTMB switch
+
+#' switch to using RTMB
+#' @param flag FALSE (default) to use TMB backend; TRUE to use RTMB backend
+#' @export
 useRTMB <- local({
   useRTMB <- FALSE
   function(flag = NULL) { useRTMB <<- flag %||% useRTMB ; useRTMB }

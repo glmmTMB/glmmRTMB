@@ -2,14 +2,10 @@
 ## Fit each model with the RTMB and legacy TMB backends, then compare
 ## likelihoods, fixed effects, and covariance estimates where applicable.
 
-context("RTMB Poisson backend")
-
-skip_if_not_installed("RTMB")
-
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+testthat::teardown(glmmTMB::useRTMB(old_use_rtmb))
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
