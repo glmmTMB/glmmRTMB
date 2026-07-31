@@ -244,6 +244,33 @@ dnbinom_robust_rtmb <- function(x, log_mu, log_var_minus_mu, log = FALSE) {
                        log = log)
 }
 
+## Translated from the compois_family case in glmmTMB.cpp:1115-1119.
+## Fitting uses RTMB::dcompois2(mean, nu); simulation uses RTMB's internal
+## rcompois2() because the exported density is the fitting interface.
+dcompois2_rtmb <- function(x, mean, nu, log = FALSE) {
+  if (inherits(x, "simref")) {
+    if (inherits(mean, "simref")) {
+      mean <- mean$value
+    }
+    if (inherits(nu, "simref")) {
+      nu <- nu$value
+    }
+    if (inherits(mean, "Matrix")) {
+      mean <- as.matrix(mean)
+    }
+    if (inherits(nu, "Matrix")) {
+      nu <- as.matrix(nu)
+    }
+    x[] <- get("rcompois2", envir = asNamespace("RTMB"))(
+      length(x),
+      mean = as.vector(mean),
+      nu = as.vector(nu)
+    )
+    return(rep(0, length(x)))
+  }
+  RTMB::dcompois2(x, mean = mean, nu = nu, log = log)
+}
+
 ## translation of glmmtmb::rtruncated_nbinom(); distrib.h:130-168
 rtruncated_nbinom_rtmb <- function(n, size, k = 0L, mu) {
   ans <- numeric(n)
@@ -696,6 +723,10 @@ rtmb_tpl <- function(parameters, data) {
     nbinom12 = dZI(dnbinom_robust_rtmb)(
       yobs_i, log_mu = log_mu()[i], log_var_minus_mu = log_var_minus_mu()[i],
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from the compois_family case in glmmTMB.cpp:1115-1119.
+    compois = dZI(dcompois2_rtmb)(
+      yobs_i, mean = mu[i], nu = 1 / phi[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0),
     ## Translated from truncated_nbinom2_family, glmmTMB.cpp:1066-1081.
     truncated_nbinom2 = dZI(dtruncated_nbinom2_rtmb)(
       yobs_i, log_mu = log_mu()[i], log_var_minus_mu = log_var_minus_mu()[i],
