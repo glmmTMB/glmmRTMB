@@ -271,6 +271,30 @@ dcompois2_rtmb <- function(x, mean, nu, log = FALSE) {
   RTMB::dcompois2(x, mean = mean, nu = nu, log = log)
 }
 
+## Translation of glmmtmb::rtruncated_compois2(); distrib.h:280-289.
+rtruncated_compois2_rtmb <- function(n, mean, nu) {
+  rcompois2 <- get("rcompois2", envir = asNamespace("RTMB"))
+  mean <- rep(mean, length.out = n)
+  nu <- rep(nu, length.out = n)
+  ans <- rcompois2(n, mean = mean, nu = nu)
+
+  nloop <- 10000L
+  counter <- 0L
+  while (any(ans < 1) && counter < nloop) {
+    zero <- ans < 1
+    ans[zero] <- rcompois2(sum(zero), mean = mean[zero], nu = nu[zero])
+    counter <- counter + 1L
+  }
+  if (any(ans < 1)) {
+    warning(
+      "Zeros in simulation of zero-truncated data. ",
+      "Possibly due to low estimated mean.",
+      call. = FALSE
+    )
+  }
+  ans
+}
+
 ## translation of glmmtmb::rtruncated_nbinom(); distrib.h:130-168
 rtruncated_nbinom_rtmb <- function(n, size, k = 0L, mu) {
   ans <- numeric(n)
@@ -334,6 +358,50 @@ log_nzprob_truncated_nbinom2_rtmb <- RTMB::Vectorize(
   },
   vectorize.args = c("log_mu", "log_size")
 )
+
+log_nzprob_truncated_compois_rtmb <- RTMB::Vectorize(
+  function(mean, nu) {
+    RTMB::logspace_sub(
+      0,
+      RTMB::dcompois2(0, mean = mean, nu = nu, log = TRUE)
+    )
+  },
+  vectorize.args = c("mean", "nu")
+)
+
+## Translated from calc_log_nzprob() and truncated_compois_family,
+## glmmTMB.cpp:293-294 and 1121-1127.
+dtruncated_compois2_rtmb <- function(x, mean, nu, log = FALSE) {
+  if (inherits(x, "simref")) {
+    if (inherits(mean, "simref")) {
+      mean <- mean$value
+    }
+    if (inherits(nu, "simref")) {
+      nu <- nu$value
+    }
+    if (inherits(mean, "Matrix")) {
+      mean <- as.matrix(mean)
+    }
+    if (inherits(nu, "Matrix")) {
+      nu <- as.matrix(nu)
+    }
+    x[] <- rtruncated_compois2_rtmb(
+      length(x),
+      mean = as.vector(mean),
+      nu = as.vector(nu)
+    )
+    return(rep(0, length(x)))
+  }
+
+  log_nzprob <- log_nzprob_truncated_compois_rtmb(mean, nu)
+  ans <- RTMB::dcompois2(x, mean = mean, nu = nu, log = TRUE) - log_nzprob
+
+  is_zero <- x < 0.001
+  if (any(is_zero)) {
+    ans[is_zero] <- -Inf
+  }
+  if (log) ans else exp(ans)
+}
 
 ## Translated from calc_log_nzprob() and the truncated_nbinom1_family
 ## likelihood case, glmmTMB.cpp:274-277 and 1042-1064
@@ -727,6 +795,10 @@ rtmb_tpl <- function(parameters, data) {
     compois = dZI(dcompois2_rtmb)(
       yobs_i, mean = mu[i], nu = 1 / phi[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from truncated_compois_family, glmmTMB.cpp:1121-1127.
+    truncated_compois = dZI(dtruncated_compois2_rtmb)(
+      yobs_i, mean = mu[i], nu = 1 / phi[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0),
     ## Translated from truncated_nbinom2_family, glmmTMB.cpp:1066-1081.
     truncated_nbinom2 = dZI(dtruncated_nbinom2_rtmb)(
       yobs_i, log_mu = log_mu()[i], log_var_minus_mu = log_var_minus_mu()[i],
@@ -781,6 +853,14 @@ rtmb_tpl <- function(parameters, data) {
     log_nzprob_pred <- log_nzprob_truncated_nbinom2_rtmb(
       log_mu_vector,
       etadisp_vector
+    )
+    mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
+  } else if (family_name == "truncated_compois") {
+    mu_vector <- mu[seq_along(mu)]
+    phi_vector <- phi[seq_along(phi)]
+    log_nzprob_pred <- log_nzprob_truncated_compois_rtmb(
+      mu_vector,
+      1 / phi_vector
     )
     mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
   }
