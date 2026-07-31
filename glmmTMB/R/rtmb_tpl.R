@@ -108,7 +108,8 @@ log_var_minus_mu_rtmb <- function(family_name, log_mu, etadisp, psi) {
 #' on `simref` objects.
 #'
 #' @param density A log-density function such as `RTMB::dpois()` or
-#'   `dnorm_tmb()` that also supports RTMB simulation through `simref` objects.
+#'   `RTMB::dnorm()` that also supports RTMB simulation through `simref`
+#'   objects.
 #' @param x The response vector, normally an RTMB `simref` object during
 #'   simulation.
 #' @param ... Distribution-specific arguments passed to `density`.
@@ -199,38 +200,6 @@ dZI <- function(density) {
     if (log) ans else exp(ans)
   }
 }
-
-## matches tmb's dnorm() arithmetic ordering
-dnorm_tmb <- local({
-  log_density <- RTMB::Vectorize(
-    function(x, mean, sd) {
-      z <- (x - mean) / sd
-      -log(sqrt(2 * pi)) - log(sd) - 0.5 * z * z
-    },
-    vectorize.args = c("x", "mean", "sd")
-  )
-
-  function(x, mean = 0, sd = 1, log = FALSE) {
-    if (inherits(x, "simref")) {
-      if (inherits(mean, "simref")) {
-        mean <- mean$value
-      }
-      if (inherits(sd, "simref")) {
-        sd <- sd$value
-      }
-      if (inherits(mean, "Matrix")) {
-        mean <- as.matrix(mean)
-      }
-      if (inherits(sd, "Matrix")) {
-        sd <- as.matrix(sd)
-      }
-      x[] <- stats::rnorm(length(x), mean = as.vector(mean), sd = as.vector(sd))
-      return(rep(0, length(x)))
-    }
-    ans <- log_density(x, mean, sd)
-    if (log) ans else exp(ans)
-  }
-})
 
 ## Fitting uses RTMB::dbinom_robust() to match glmmTMB.cpp:981.
 ## Simulation follows glmmTMB.cpp:982 but delegates to RTMB::dbinom(),
@@ -569,7 +538,7 @@ prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
         parval <- parvec[j]
         logpriorval <- switch(
           as.character(prior_distrib[i]),
-          "0" = dnorm_tmb(
+          "0" = RTMB::dnorm(
             parval,
             mean = prior_params[par_ind],
             sd = prior_params[par_ind + 1L],
@@ -702,8 +671,10 @@ rtmb_tpl <- function(parameters, data) {
       yobs_i, lambda = mu[i], eta_zi = eta_zi, log = TRUE,
       is_zero = yobs_obs[i] == 0
     ),
-    gaussian = dZI(dnorm_tmb)(yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
-                              log = TRUE, is_zero = yobs_obs[i] == 0),
+    gaussian = dZI(RTMB::dnorm)(
+      yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
     binomial = dZI(dbinom_robust_rtmb)(
       yobs_i, size = size[i], logit_p = logit_mu()[i], eta_zi = eta_zi,
@@ -1072,7 +1043,7 @@ termwise_nll <- function(U, theta, term) {
 
     if (!simulation || term$simCode == .valid_simcode[["random"]]) {
       for (j in seq_len(reps)) {
-        nll <- nll - sum(dnorm_tmb(U[, j], 0, 1, log = TRUE))
+        nll <- nll - sum(RTMB::dnorm(U[, j], 0, 1, log = TRUE))
       }
     } else if (term$simCode == .valid_simcode[["zero"]]) {
       U[] <- 0
