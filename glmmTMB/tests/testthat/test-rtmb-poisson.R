@@ -4,9 +4,6 @@
 
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB::useRTMB()
-withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
-
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
 tol_varcorr <- 1e-4
@@ -28,7 +25,7 @@ poisson_panel$count <- rpois(
 )
 
 test_that("poisson: fixed conditional effects", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = poisson,
@@ -57,7 +54,7 @@ test_that("poisson: fixed conditional effects", {
 })
 
 test_that("poisson: multi-level factor fixed effects", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ spp,
     family = poisson,
@@ -91,7 +88,7 @@ test_that("poisson: conditional offset", {
     log_exposure = log(runif(nrow(Salamanders), 0.5, 2))
   )
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + offset(log_exposure),
     family = poisson,
@@ -125,7 +122,7 @@ test_that("poisson: observation weights", {
     w = rep(c(0.5, 1, 2), length.out = nrow(Salamanders))
   )
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = poisson,
@@ -159,7 +156,7 @@ test_that("poisson: missing responses", {
   missing_data <- Salamanders
   missing_data$count[c(3, 21, 55)] <- NA
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = poisson,
@@ -190,7 +187,7 @@ test_that("poisson: missing responses", {
 })
 
 test_that("poisson: sparse conditional fixed-effects matrix", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + spp,
     family = poisson,
@@ -221,7 +218,7 @@ test_that("poisson: sparse conditional fixed-effects matrix", {
 })
 
 test_that("poisson: explicit log link", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = poisson(link = "log"),
@@ -252,7 +249,7 @@ test_that("poisson: explicit log link", {
 test_that("poisson: identity link", {
   identity_start <- mean(Salamanders$count)
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ 1,
     family = poisson(link = "identity"),
@@ -285,7 +282,7 @@ test_that("poisson: identity link", {
 test_that("poisson: square-root link", {
   sqrt_start <- sqrt(mean(Salamanders$count))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ 1,
     family = poisson(link = "sqrt"),
@@ -316,7 +313,7 @@ test_that("poisson: square-root link", {
 })
 
 test_that("poisson: conditional random intercept", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     family = poisson,
@@ -350,7 +347,7 @@ test_that("poisson: conditional random intercept", {
 })
 
 test_that("poisson: correlated conditional random slope", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + (time | group),
     family = poisson,
@@ -384,7 +381,7 @@ test_that("poisson: correlated conditional random slope", {
 })
 
 test_that("poisson: multiple conditional random-effect terms", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site) + (1 | spp),
     family = poisson,
@@ -418,7 +415,7 @@ test_that("poisson: multiple conditional random-effect terms", {
 })
 
 test_that("poisson: diagonal conditional covariance", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + diag(time | group),
     family = poisson,
@@ -452,7 +449,7 @@ test_that("poisson: diagonal conditional covariance", {
 })
 
 test_that("poisson: homogeneous diagonal conditional covariance", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + homdiag(time | group),
     family = poisson,
@@ -486,7 +483,7 @@ test_that("poisson: homogeneous diagonal conditional covariance", {
 })
 
 test_that("poisson: fixed zero-inflation intercept", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 1,
@@ -522,7 +519,7 @@ test_that("poisson: fixed zero-inflation intercept", {
 })
 
 test_that("poisson: zero-inflation fixed effects", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -563,7 +560,7 @@ test_that("poisson: zero-inflation offset", {
     zi_offset = rep(c(-0.2, 0.2), length.out = nrow(Salamanders))
   )
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined + offset(zi_offset),
@@ -594,7 +591,7 @@ test_that("poisson: zero-inflation offset", {
 })
 
 test_that("poisson: zero-inflation random intercept", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 1 + (1 | site),
@@ -630,7 +627,7 @@ test_that("poisson: zero-inflation random intercept", {
 })
 
 test_that("poisson: conditional and zero-inflation random effects", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     ziformula = ~ mined + (1 | site),
@@ -674,7 +671,7 @@ test_that("poisson: random-only zero inflation", {
   thetazi <- log(0.5)
   theta_map <- factor(NA)
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 0 + (1 | site),
@@ -725,7 +722,7 @@ test_that("poisson: random-only ZI simulation generates structural zeros", {
   thetazi <- log(0.5)
   fixed_map <- factor(NA)
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ 1,
     ziformula = ~ 0 + (1 | site),
@@ -764,7 +761,7 @@ test_that("poisson: weighted zero-inflation model", {
     w = rep(c(1, 2), length.out = nrow(Salamanders))
   )
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -802,7 +799,7 @@ test_that("poisson: weighted zero-inflation model", {
 })
 
 test_that("poisson: sparse conditional and ZI matrices", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + spp,
     ziformula = ~ mined,
@@ -840,7 +837,7 @@ test_that("poisson: sparse conditional and ZI matrices", {
 })
 
 test_that("poisson: simulation under RTMB backend", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   model <- glmmTMB(
     count ~ mined + (1 | site),
     family = poisson,
@@ -858,7 +855,7 @@ test_that("poisson: simulation under RTMB backend", {
 })
 
 test_that("poisson: zero-inflated simulation generates structural zeros", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   model <- glmmTMB(
     count ~ 1,
     ziformula = ~ 1,
@@ -882,7 +879,7 @@ test_that("poisson: homogeneous AR1 covariance", {
   theta <- c(log(0.4), 0.3)
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + ar1(0 + time_fac | group),
     family = poisson,
@@ -923,7 +920,7 @@ test_that("poisson: heterogeneous AR1 covariance", {
   theta <- c(rep(log(0.4), 4), 0.3)
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + hetar1(0 + time_fac | group),
     family = poisson,
@@ -959,7 +956,7 @@ test_that("poisson: Ornstein-Uhlenbeck covariance", {
   theta <- c(log(0.4), log(0.7))
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + ou(0 + time_num | group),
     family = poisson,
@@ -995,7 +992,7 @@ test_that("poisson: heterogeneous compound-symmetry covariance", {
   theta <- c(rep(log(0.4), 4), 0)
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + cs(0 + time_fac | group),
     family = poisson,
@@ -1031,7 +1028,7 @@ test_that("poisson: homogeneous compound-symmetry covariance", {
   theta <- c(log(0.4), 0)
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + homcs(0 + time_fac | group),
     family = poisson,
@@ -1067,7 +1064,7 @@ test_that("poisson: heterogeneous Toeplitz covariance", {
   theta <- c(rep(log(0.4), 4), rep(0.2, 3))
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + toep(0 + time_fac | group),
     family = poisson,
@@ -1103,7 +1100,7 @@ test_that("poisson: homogeneous Toeplitz covariance", {
   theta <- c(log(0.4), rep(0.2, 3))
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + homtoep(0 + time_fac | group),
     family = poisson,
@@ -1140,7 +1137,7 @@ test_that("poisson: proportional covariance", {
   proportional_matrix <- diag(2)
   dimnames(proportional_matrix) <- list(matrix_names, matrix_names)
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + propto(time | group, proportional_matrix),
     family = poisson,
@@ -1178,7 +1175,7 @@ test_that("poisson: fixed equal-to covariance", {
   fixed_covariance <- matrix(c(0.25, 0.02, 0.02, 0.04), 2, 2)
   dimnames(fixed_covariance) <- list(matrix_names, matrix_names)
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ time + equalto(time | group, fixed_covariance),
     family = poisson,
@@ -1215,7 +1212,7 @@ test_that("poisson: predict with standard errors", {
   newdata <- Salamanders[seq_len(10), ]
   aggregate <- Salamanders$mined
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     family = poisson,
@@ -1261,7 +1258,7 @@ test_that("poisson: predict with standard errors", {
 })
 
 test_that("poisson: zero-inflated predict with standard errors", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     ziformula = ~ mined,
@@ -1304,7 +1301,7 @@ test_that("poisson: fixed-effect and random-effect priors", {
     coef = c("minedno", "1|site")
   )
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     family = poisson,
@@ -1346,7 +1343,7 @@ test_that("poisson: zero-inflation fixed-effect priors", {
     coef = "minedno"
   )
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     ziformula = ~ mined,

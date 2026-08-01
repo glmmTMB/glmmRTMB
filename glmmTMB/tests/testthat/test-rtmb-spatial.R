@@ -4,9 +4,6 @@ context("RTMB spatial covariance structures")
 
 skip_if_not_installed("RTMB")
 
-old_use_rtmb <- glmmTMB::useRTMB()
-withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
-
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
 tol_varcorr <- 1e-4
@@ -31,7 +28,7 @@ test_that("exponential spatial covariance matches TMB and distance formula", {
   theta <- c(log(spatial_sd), log(spatial_range))
   theta_map <- factor(c(NA, NA))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     gaussian_response ~ x + exp(0 + pos | group),
     family = gaussian,
@@ -80,7 +77,7 @@ test_that("Gaussian spatial covariance matches TMB and distance formula", {
   theta <- c(log(spatial_sd), log(spatial_range))
   theta_map <- factor(c(NA, NA))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     gaussian_response ~ x + gau(0 + pos | group),
     family = gaussian,
@@ -136,7 +133,7 @@ test_that("Matern spatial covariance matches TMB and distance formula", {
   )
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     gaussian_response ~ x + mat(0 + pos | group),
     family = gaussian,
@@ -194,7 +191,7 @@ test_that("exponential spatial covariance works with Poisson responses", {
   theta <- c(log(0.5), log(1.2))
   theta_map <- factor(c(NA, NA))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + exp(0 + pos | group),
     family = poisson,
@@ -237,7 +234,7 @@ test_that("Gaussian spatial covariance works in zero-inflation model", {
   thetazi <- c(log(0.5), log(1.2))
   theta_map <- factor(c(NA, NA))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     ziformula = ~ 1 + gau(0 + pos | group),
@@ -280,7 +277,7 @@ test_that("spatial covariance simulation works under RTMB", {
   theta <- c(log(0.5), log(1.2))
   theta_map <- factor(c(NA, NA))
 
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   exponential_model <- glmmTMB(
     gaussian_response ~ x + exp(0 + pos | group),
     family = gaussian,

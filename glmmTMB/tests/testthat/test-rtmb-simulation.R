@@ -4,9 +4,6 @@ context("RTMB random-effect simulation controls")
 
 skip_if_not_installed("RTMB")
 
-old_use_rtmb <- glmmTMB::useRTMB()
-withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
-
 data("sleepstudy", package = "lme4")
 
 test_that("random-effect simCode modes match TMB", {

@@ -8,9 +8,6 @@ skip_if_not_installed("RTMB")
 
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB::useRTMB()
-withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
-
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
 tol_varcorr <- 1e-4
@@ -69,7 +66,7 @@ test_that("nbinom12: robust density formula matches stats::dnbinom", {
 })
 
 test_that("nbinom12: fixed conditional effects", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     family = nbinom12,
@@ -90,7 +87,7 @@ test_that("nbinom12: fixed conditional effects", {
 })
 
 test_that("nbinom12: offsets and weights", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -112,7 +109,7 @@ test_that("nbinom12: offsets and weights", {
 })
 
 test_that("nbinom12: dispersion fixed effects", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -135,7 +132,7 @@ test_that("nbinom12: dispersion fixed effects", {
 })
 
 test_that("nbinom12: conditional random intercept", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom12,
@@ -160,7 +157,7 @@ test_that("nbinom12: conditional random intercept", {
 })
 
 test_that("nbinom12: fixed zero inflation", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -183,7 +180,7 @@ test_that("nbinom12: fixed zero inflation", {
 })
 
 test_that("nbinom12: prediction with standard errors", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom12,
@@ -205,7 +202,7 @@ test_that("nbinom12: prediction with standard errors", {
 })
 
 test_that("nbinom12: simulation works under RTMB backend", {
-  glmmTMB::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   model <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom12,
