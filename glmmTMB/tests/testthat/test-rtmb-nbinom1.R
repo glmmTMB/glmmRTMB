@@ -8,8 +8,8 @@ skip_if_not_installed("RTMB")
 
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
@@ -54,7 +54,7 @@ nbinom1_zi_re_dat$count <- ifelse(
 )
 
 test_that("nbinom1: fixed conditional effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = nbinom1,
@@ -62,7 +62,7 @@ test_that("nbinom1: fixed conditional effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     family = nbinom1,
@@ -83,7 +83,7 @@ test_that("nbinom1: fixed conditional effects", {
 })
 
 test_that("nbinom1: offsets and weights", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -92,7 +92,7 @@ test_that("nbinom1: offsets and weights", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -114,7 +114,7 @@ test_that("nbinom1: offsets and weights", {
 })
 
 test_that("nbinom1: dispersion fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -123,7 +123,7 @@ test_that("nbinom1: dispersion fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -145,7 +145,7 @@ test_that("nbinom1: dispersion fixed effects", {
 })
 
 test_that("nbinom1: conditional random intercept", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom1,
@@ -153,7 +153,7 @@ test_that("nbinom1: conditional random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom1,
@@ -179,7 +179,7 @@ test_that("nbinom1: conditional random intercept", {
 })
 
 test_that("nbinom1: zero-inflation fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     ziformula = ~ x,
@@ -188,7 +188,7 @@ test_that("nbinom1: zero-inflation fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     ziformula = ~ x,
@@ -210,7 +210,7 @@ test_that("nbinom1: zero-inflation fixed effects", {
 })
 
 test_that("nbinom1: zero-inflation random effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     ziformula = ~ 1 + (1 | g),
@@ -219,7 +219,7 @@ test_that("nbinom1: zero-inflation random effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     ziformula = ~ 1 + (1 | g),
@@ -246,14 +246,14 @@ test_that("nbinom1: zero-inflation random effects", {
 })
 
 test_that("nbinom1: prediction with standard errors", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom1,
     data = nbinom1_dat
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom1,
@@ -268,7 +268,7 @@ test_that("nbinom1: prediction with standard errors", {
 })
 
 test_that("nbinom1: simulate works under RTMB backend", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = nbinom1,

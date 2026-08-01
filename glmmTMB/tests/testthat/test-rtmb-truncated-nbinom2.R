@@ -8,8 +8,8 @@ skip_if_not_installed("RTMB")
 
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
@@ -62,7 +62,7 @@ test_that("truncated nbinom2: RTMB density matches package density", {
 })
 
 test_that("truncated nbinom2: fixed conditional effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = truncated_nbinom2,
@@ -70,7 +70,7 @@ test_that("truncated nbinom2: fixed conditional effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     family = truncated_nbinom2,
@@ -88,7 +88,7 @@ test_that("truncated nbinom2: fixed conditional effects", {
 })
 
 test_that("truncated nbinom2: offsets and weights", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -97,7 +97,7 @@ test_that("truncated nbinom2: offsets and weights", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -115,7 +115,7 @@ test_that("truncated nbinom2: offsets and weights", {
 })
 
 test_that("truncated nbinom2: dispersion fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -124,7 +124,7 @@ test_that("truncated nbinom2: dispersion fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -142,7 +142,7 @@ test_that("truncated nbinom2: dispersion fixed effects", {
 })
 
 test_that("truncated nbinom2: conditional random intercept", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = truncated_nbinom2,
@@ -150,7 +150,7 @@ test_that("truncated nbinom2: conditional random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + (1 | g),
     family = truncated_nbinom2,
@@ -172,7 +172,7 @@ test_that("truncated nbinom2: conditional random intercept", {
 })
 
 test_that("truncated nbinom2: fixed zero inflation", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -181,7 +181,7 @@ test_that("truncated nbinom2: fixed zero inflation", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -203,7 +203,7 @@ test_that("truncated nbinom2: zero-inflation random intercept", {
   thetazi <- log(0.5)
   theta_map <- factor(NA)
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined + (1 | site),
@@ -214,7 +214,7 @@ test_that("truncated nbinom2: zero-inflation random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined + (1 | site),
@@ -239,14 +239,14 @@ test_that("truncated nbinom2: zero-inflation random intercept", {
 })
 
 test_that("truncated nbinom2: prediction with standard errors", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = truncated_nbinom2,
     data = truncated_nbinom2_dat
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + (1 | g),
     family = truncated_nbinom2,
@@ -261,7 +261,7 @@ test_that("truncated nbinom2: prediction with standard errors", {
 })
 
 test_that("truncated nbinom2: simulation is strictly positive", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   model <- glmmTMB(
     count ~ x + (1 | g),
     family = truncated_nbinom2,
@@ -281,7 +281,7 @@ test_that("truncated nbinom2: simulation is strictly positive", {
 test_that("truncated nbinom2: ZI simulation contains zeros and positives", {
   fixed_map <- factor(NA)
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   model <- glmmTMB(
     count ~ 1,
     ziformula = ~ 1,

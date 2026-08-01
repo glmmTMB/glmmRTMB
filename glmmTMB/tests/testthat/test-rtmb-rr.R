@@ -4,8 +4,8 @@ context("RTMB reduced-rank covariance structure")
 
 skip_if_not_installed("RTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
@@ -33,7 +33,7 @@ rr_gaussian_data$response <- 2 + 0.5 * rr_gaussian_data$x +
 test_that("Poisson rank-one rr covariance matches TMB", {
   formula <- abund ~ Species + rr(0 + Species | id, d = 1)
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     formula,
     family = poisson,
@@ -41,7 +41,7 @@ test_that("Poisson rank-one rr covariance matches TMB", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     formula,
     family = poisson,
@@ -74,7 +74,7 @@ test_that("Poisson rank-one rr covariance matches TMB", {
 test_that("Gaussian rank-two rr covariance matches TMB", {
   formula <- response ~ x + rr(0 + level | group, d = 2)
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     formula,
     family = gaussian,
@@ -82,7 +82,7 @@ test_that("Gaussian rank-two rr covariance matches TMB", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     formula,
     family = gaussian,
@@ -123,7 +123,7 @@ test_that("rr covariance works in the zero-inflation model", {
   thetazi <- rep(0.15, nlevels(Salamanders$spp))
   theta_map <- factor(rep(NA, length(thetazi)))
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 1 + rr(0 + spp | site, d = 1),
@@ -134,7 +134,7 @@ test_that("rr covariance works in the zero-inflation model", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 1 + rr(0 + spp | site, d = 1),
@@ -168,7 +168,7 @@ test_that("rr covariance works in the dispersion model", {
   thetadisp <- rep(0.08, nlevels(sleepstudy$DaysFac))
   theta_map <- factor(rep(NA, length(thetadisp)))
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     Reaction ~ Days,
     dispformula = ~ 1 + rr(0 + DaysFac | Subject, d = 1),
@@ -179,7 +179,7 @@ test_that("rr covariance works in the dispersion model", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     Reaction ~ Days,
     dispformula = ~ 1 + rr(0 + DaysFac | Subject, d = 1),
@@ -211,7 +211,7 @@ test_that("rr simulation works under RTMB", {
   theta <- rep(0.2, 7L)
   theta_map <- factor(rep(NA, length(theta)))
 
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   model <- glmmTMB(
     response ~ x + rr(0 + level | group, d = 2),
     family = gaussian,

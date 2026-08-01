@@ -8,8 +8,8 @@ skip_if_not_installed("RTMB")
 
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
@@ -51,7 +51,7 @@ compois_zi_re_dat$count <- ifelse(
 )
 
 test_that("compois: fixed conditional effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = compois,
@@ -59,7 +59,7 @@ test_that("compois: fixed conditional effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     family = compois,
@@ -80,7 +80,7 @@ test_that("compois: fixed conditional effects", {
 })
 
 test_that("compois: offsets and weights", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -89,7 +89,7 @@ test_that("compois: offsets and weights", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + offset(off),
     weights = w,
@@ -111,7 +111,7 @@ test_that("compois: offsets and weights", {
 })
 
 test_that("compois: dispersion fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -120,7 +120,7 @@ test_that("compois: dispersion fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     dispformula = ~ x,
@@ -142,7 +142,7 @@ test_that("compois: dispersion fixed effects", {
 })
 
 test_that("compois: conditional random intercept", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = compois,
@@ -150,7 +150,7 @@ test_that("compois: conditional random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + (1 | g),
     family = compois,
@@ -176,7 +176,7 @@ test_that("compois: conditional random intercept", {
 })
 
 test_that("compois: zero-inflation fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     ziformula = ~ x,
@@ -185,7 +185,7 @@ test_that("compois: zero-inflation fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     ziformula = ~ x,
@@ -207,7 +207,7 @@ test_that("compois: zero-inflation fixed effects", {
 })
 
 test_that("compois: zero-inflation random effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x,
     ziformula = ~ 1 + (1 | g),
@@ -216,7 +216,7 @@ test_that("compois: zero-inflation random effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x,
     ziformula = ~ 1 + (1 | g),
@@ -243,14 +243,14 @@ test_that("compois: zero-inflation random effects", {
 })
 
 test_that("compois: prediction with standard errors", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = compois,
     data = compois_dat
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ x + (1 | g),
     family = compois,
@@ -265,7 +265,7 @@ test_that("compois: prediction with standard errors", {
 })
 
 test_that("compois: simulate works under RTMB backend", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ x + (1 | g),
     family = compois,

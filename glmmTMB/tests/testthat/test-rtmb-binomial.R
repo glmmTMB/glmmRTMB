@@ -8,8 +8,8 @@ skip_if_not_installed("RTMB")
 
 data("cbpp", package = "lme4")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
 
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
@@ -40,7 +40,7 @@ zi_binom_dat$y <- ifelse(
 )
 
 test_that("binomial: binary response with fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     y ~ x,
     family = binomial,
@@ -48,7 +48,7 @@ test_that("binomial: binary response with fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     y ~ x,
     family = binomial,
@@ -69,7 +69,7 @@ test_that("binomial: binary response with fixed effects", {
 })
 
 test_that("binomial: grouped response with weights", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     incidence / size ~ period,
     weights = size,
@@ -78,7 +78,7 @@ test_that("binomial: grouped response with weights", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     incidence / size ~ period,
     weights = size,
@@ -100,7 +100,7 @@ test_that("binomial: grouped response with weights", {
 })
 
 test_that("binomial: cbind response", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     cbind(incidence, size - incidence) ~ period,
     family = binomial,
@@ -108,7 +108,7 @@ test_that("binomial: cbind response", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     cbind(incidence, size - incidence) ~ period,
     family = binomial,
@@ -129,7 +129,7 @@ test_that("binomial: cbind response", {
 })
 
 test_that("binomial: conditional random intercept", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     incidence / size ~ period + (1 | herd),
     weights = size,
@@ -138,7 +138,7 @@ test_that("binomial: conditional random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     incidence / size ~ period + (1 | herd),
     weights = size,
@@ -165,7 +165,7 @@ test_that("binomial: conditional random intercept", {
 })
 
 test_that("binomial: cloglog link", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     y ~ x,
     family = binomial(link = "cloglog"),
@@ -173,7 +173,7 @@ test_that("binomial: cloglog link", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     y ~ x,
     family = binomial(link = "cloglog"),
@@ -194,7 +194,7 @@ test_that("binomial: cloglog link", {
 })
 
 test_that("binomial: zero-inflation fixed effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     y ~ x,
     ziformula = ~ x,
@@ -203,7 +203,7 @@ test_that("binomial: zero-inflation fixed effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     y ~ x,
     ziformula = ~ x,
@@ -230,7 +230,7 @@ test_that("binomial: zero-inflation fixed effects", {
 })
 
 test_that("binomial: zero-inflation random effects", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     y / size ~ x,
     ziformula = ~ 1 + (1 | g),
@@ -240,7 +240,7 @@ test_that("binomial: zero-inflation random effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     y / size ~ x,
     ziformula = ~ 1 + (1 | g),
@@ -273,7 +273,7 @@ test_that("binomial: zero-inflation random effects", {
 })
 
 test_that("binomial: simulate works under RTMB backend", {
-  glmmTMB:::useRTMB(TRUE)
+  glmmTMB::useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     incidence / size ~ period + (1 | herd),
     weights = size,

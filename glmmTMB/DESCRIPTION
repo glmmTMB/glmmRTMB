@@ -70,6 +70,7 @@ Suggests:
     knitr,
     rmarkdown,
     testthat,
+    withr,
     MASS,
     lattice,
     ggplot2 (>= 2.2.1),

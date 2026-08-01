@@ -4,14 +4,14 @@ context("RTMB random-effect simulation controls")
 
 skip_if_not_installed("RTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
+old_use_rtmb <- glmmTMB::useRTMB()
+withr::defer(glmmTMB::useRTMB(old_use_rtmb), testthat::teardown_env())
 
 data("sleepstudy", package = "lme4")
 
 test_that("random-effect simCode modes match TMB", {
   for (backend in c(TRUE, FALSE)) {
-    glmmTMB:::useRTMB(backend)
+    glmmTMB::useRTMB(backend)
     model <- glmmTMB(
       Reaction ~ Days + (1 | Subject),
       family = gaussian,
@@ -53,7 +53,7 @@ test_that("random-only covariance structures reject other simCode modes", {
   simulation_data <- transform(sleepstudy, DaysFac = factor(Days))
 
   for (backend in c(TRUE, FALSE)) {
-    glmmTMB:::useRTMB(backend)
+    glmmTMB::useRTMB(backend)
     model <- glmmTMB(
       Reaction ~ Days + homdiag(0 + DaysFac | Subject),
       family = gaussian,
