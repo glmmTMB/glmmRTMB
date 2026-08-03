@@ -667,6 +667,38 @@ printDispersion <- function(ff,s) {
     NULL
 }
 
+## Pad a fixed-effect covariance matrix with zero rows/columns for
+## coefficients that were fixed via 'map': these are known constants, so
+## their sampling variance is exactly zero. Restores the convention that
+## dim(vcov) matches length(fixef) for downstream consumers
+## (emmeans, car::Anova, ...). No-op when no coefficients are mapped.
+pad_mapped_vcov <- function(object, V, component = "cond") {
+    map_nm <- switch(component, cond = "beta", zi = "betazi",
+                     disp = "betadisp")
+    bmap <- object$obj$env$map[[map_nm]]
+    if (is.null(bmap) || !any(is.na(bmap)) || is.null(dim(V))) return(V)
+    bhat <- fixef(object)[[component]]
+    nb <- length(bhat)
+    fixed <- which(is.na(bmap))
+    if (nrow(V) == nb - length(fixed)) {
+        ## reduced vcov (include_nonest = FALSE): pad to full size
+        est <- which(!is.na(bmap))
+        Vfull <- matrix(0, nb, nb,
+                        dimnames = list(names(bhat), names(bhat)))
+        Vfull[est, est] <- as.matrix(V)
+        return(Vfull)
+    }
+    if (nrow(V) == nb) {
+        ## full-size vcov stores NA rows/columns for mapped coefficients;
+        ## replace with zeros so they do not propagate through
+        ## linear-hypothesis algebra
+        V[fixed, ] <- 0
+        V[, fixed] <- 0
+        return(V)
+    }
+    V
+}
+
 #' Retrieve family-specific parameters
 #'
 #' Most conditional distributions have only parameters governing their location
@@ -817,7 +849,9 @@ residuals.glmmTMB <- function(object, type=c("response", "pearson", "working", "
            },
            "dunn-smyth" = {
                phi <- predict(object, type = "disp")
-               dunnsmyth_resids(mr, mu, fam$fam, phi = phi)
+               ## wts holds the number of trials for binomial-type responses
+               ## (cbind two-column or proportion-plus-weights specifications)
+               dunnsmyth_resids(mr, mu, fam$fam, phi = phi, size = wts)
            },
            deviance = {
                if (is.null(dr <- fam$dev.resids)) {
@@ -853,6 +887,8 @@ residuals.glmmTMB <- function(object, type=c("response", "pearson", "working", "
              vargs$mu <- vargs$lambda <- mu
              vargs$theta <- vargs$phi <- vargs$alpha <- theta
              vargs$shape <- vargs$power <- shape
+             ## number of trials for binomial-type responses (combinomial)
+             vargs$size <- wts
              # subset to only the arguments used by the variance function
              vargs <- vargs[vformals]
              ## suppress beta-binomial $variance() message, substitute
@@ -1763,17 +1799,27 @@ deviance.glmmTMB <- function(object, ...) {
     sum(residuals(object, type = "deviance")^2)
 }
 
-dunnsmyth_resids <- function(yobs, mu, family, phi=NULL) {
-    res.families <- c("poisson", "nbinom2", "nbinom1", "binomial", "genpois", "bell")
+dunnsmyth_resids <- function(yobs, mu, family, phi=NULL, size=NULL) {
+    res.families <- c("poisson", "nbinom2", "nbinom1", "binomial", "genpois", "bell",
+                      "combinomial")
     if (family == "gaussian") return(yobs-mu)
     if (!family %in% res.families) {
         stop("can't compute Dunn-Smyth residuals for family ",
              sQuote(family))
     }
+    if (family == "combinomial" && is.null(size)) {
+        stop("'size' (number of trials) is required for combinomial Dunn-Smyth residuals")
+    }
+    ## binomial-type families arrive with yobs and mu on the proportion scale
+    ## (see residuals.glmmTMB); rescale the observations to counts
+    if (family %in% c("binomial", "combinomial") && !is.null(size)) {
+        yobs <- round(yobs * size)
+    }
     args <- switch(family,
                    nbinom2  = list(size = phi),
                    nbinom1  = list(size = mu/(phi + 1e-5)),
-                   binomial = list(size = 1),
+                   binomial = list(size = if (is.null(size)) 1 else size),
+                   combinomial = list(phi = phi, size = size),
                    genpois  = list(phi = phi),
                    NULL)
     pfun <- switch(family,
@@ -1781,6 +1827,7 @@ dunnsmyth_resids <- function(yobs, mu, family, phi=NULL) {
                    nbinom1  = pnbinom0,
                    poisson  = ppois,
                    binomial = pbinom,
+                   combinomial = pcombinom_mu,
                    genpois  = pgenpois_mu,
                    bell     = pbell)
     a <- do.call(pfun, c(list(yobs - 1, mu), args))
@@ -1914,6 +1961,12 @@ estfun.glmmTMB <- function(x, full = FALSE, cluster = getGroups(x), rawnames = F
     # and gradient.
     original_weights <- x$obj$env$data$weights
     original_neg_log_lik <- x$obj$fn(x$fit$par)
+    env_vars <- c("par", "last.par", "last.par.best", "last.par.ok",
+                  "parameters")
+    env_vars <- intersect(env_vars, ls(x$obj$env)) ## drop nonexistent values
+    orig_env_vars <- lapply(env_vars,
+                            function(n) x$obj$env[[n]])
+    names(orig_env_vars) <- env_vars
 
     # Prepare zero weights vector for below.
     zero_weights <- rep(0, stats::nobs(x))
@@ -1923,7 +1976,11 @@ estfun.glmmTMB <- function(x, full = FALSE, cluster = getGroups(x), rawnames = F
     on.exit({
         # Reset the weights to the original values.
         x$obj$env$data$weights <- original_weights
-        # Retape the TMB object to apply the changes.
+        for (n in env_vars) {
+            assign(n, orig_env_vars[[n]],
+                   envir = x$obj$env)
+        }
+        ## Retape the TMB object to apply the changes.
         x$obj$retape(set.defaults = FALSE)
     })
 
