@@ -2,13 +2,10 @@ context("RTMB one-step-ahead residual support")
 
 skip_if_not_installed("RTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
-
 test_that("gaussian OSA residuals match TMB", {
   data("sleepstudy", package = "lme4")
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(Reaction ~ Days, data = sleepstudy, family = gaussian,
                     se = FALSE)
   osa_rtmb <- RTMB::oneStepPredict(
@@ -20,7 +17,7 @@ test_that("gaussian OSA residuals match TMB", {
     trace = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(Reaction ~ Days, data = sleepstudy, family = gaussian,
                    se = FALSE)
   osa_tmb <- TMB::oneStepPredict(
@@ -42,7 +39,7 @@ test_that("poisson OSA residuals match TMB", {
   d <- Salamanders[seq_len(60), ]
   discrete_support <- 0:(max(d$count) + 3L)
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(count ~ mined, data = d, family = poisson, se = FALSE)
   osa_rtmb <- RTMB::oneStepPredict(
     m_rtmb$obj,
@@ -54,7 +51,7 @@ test_that("poisson OSA residuals match TMB", {
     trace = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(count ~ mined, data = d, family = poisson, se = FALSE)
   osa_tmb <- TMB::oneStepPredict(
     m_tmb$obj,

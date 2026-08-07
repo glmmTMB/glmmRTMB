@@ -186,11 +186,18 @@ emm_basis.glmmTMB <- function (object, trms, xlev, grid, component = c("cond", "
         }
     }
     else {
+	## combinomial with allow_negative_nu uses identity link on dispersion;
+        ## other families always use log link on dispformula
+        disp_link <- if (isTRUE(object$modelInfo$family$allow_negative_nu)) "identity" else "log"
         fam <- switch(component, cond = family(object), zi = list(link = "logit"), 
-                      disp = list(link = "log"))
+                      disp = list(link = disp_link))
         misc <- emmeans::.std.link.labels(fam, misc)
         if (missing(vcov.)) {
             V <- as.matrix(vcov(object, include_nonest = FALSE)[[component]])
+            ## coefficients fixed via 'map' are known constants: pad the
+            ## covariance matrix with zero rows/columns so its dimension
+            ## matches the full coefficient vector used for the grid
+            V <- pad_mapped_vcov(object, V, component)
         }
         else {
             V <- vcov.

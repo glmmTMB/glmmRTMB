@@ -8,9 +8,6 @@ skip_if_not_installed("RTMB")
 
 data("Salamanders", package = "glmmTMB")
 
-old_use_rtmb <- glmmTMB:::useRTMB()
-testthat::teardown(glmmTMB:::useRTMB(old_use_rtmb))
-
 tol_logLik <- 1e-5
 tol_fixef <- 1e-5
 tol_varcorr <- 1e-4
@@ -38,7 +35,7 @@ test_that("truncated Poisson: RTMB density matches package density", {
 })
 
 test_that("truncated Poisson: fixed conditional effects", {
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = truncated_poisson,
@@ -46,7 +43,7 @@ test_that("truncated Poisson: fixed conditional effects", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     family = truncated_poisson,
@@ -73,7 +70,7 @@ test_that("truncated Poisson: conditional offset", {
     log_exposure = log(runif(nrow(positive_salamanders), 0.5, 2))
   )
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + offset(log_exposure),
     family = truncated_poisson,
@@ -81,7 +78,7 @@ test_that("truncated Poisson: conditional offset", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined + offset(log_exposure),
     family = truncated_poisson,
@@ -107,7 +104,7 @@ test_that("truncated Poisson: observation weights", {
     w = rep(c(0.5, 1, 2), length.out = nrow(positive_salamanders))
   )
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     family = truncated_poisson,
@@ -116,7 +113,7 @@ test_that("truncated Poisson: observation weights", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     family = truncated_poisson,
@@ -140,7 +137,7 @@ test_that("truncated Poisson: observation weights", {
 test_that("truncated Poisson: identity link", {
   identity_start <- mean(positive_salamanders$count)
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ 1,
     family = truncated_poisson(link = "identity"),
@@ -149,7 +146,7 @@ test_that("truncated Poisson: identity link", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ 1,
     family = truncated_poisson(link = "identity"),
@@ -173,7 +170,7 @@ test_that("truncated Poisson: identity link", {
 test_that("truncated Poisson: square-root link", {
   sqrt_start <- sqrt(mean(positive_salamanders$count))
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ 1,
     family = truncated_poisson(link = "sqrt"),
@@ -182,7 +179,7 @@ test_that("truncated Poisson: square-root link", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ 1,
     family = truncated_poisson(link = "sqrt"),
@@ -204,7 +201,7 @@ test_that("truncated Poisson: square-root link", {
 })
 
 test_that("truncated Poisson: conditional random intercept", {
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + (1 | site),
     family = truncated_poisson,
@@ -212,7 +209,7 @@ test_that("truncated Poisson: conditional random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined + (1 | site),
     family = truncated_poisson,
@@ -238,7 +235,7 @@ test_that("truncated Poisson: conditional random intercept", {
 })
 
 test_that("truncated Poisson: sparse conditional matrix", {
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined + spp,
     family = truncated_poisson,
@@ -247,7 +244,7 @@ test_that("truncated Poisson: sparse conditional matrix", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined + spp,
     family = truncated_poisson,
@@ -269,7 +266,7 @@ test_that("truncated Poisson: sparse conditional matrix", {
 })
 
 test_that("truncated Poisson: fixed zero inflation", {
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -278,7 +275,7 @@ test_that("truncated Poisson: fixed zero inflation", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined,
@@ -308,7 +305,7 @@ test_that("truncated Poisson: zero-inflation random intercept", {
   thetazi <- log(0.5)
   theta_map <- factor(NA)
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined + (1 | site),
@@ -319,7 +316,7 @@ test_that("truncated Poisson: zero-inflation random intercept", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ mined + (1 | site),
@@ -351,7 +348,7 @@ test_that("truncated Poisson: random-only zero inflation", {
   thetazi <- log(0.5)
   theta_map <- factor(NA)
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 0 + (1 | site),
@@ -362,7 +359,7 @@ test_that("truncated Poisson: random-only zero inflation", {
     se = FALSE
   )
 
-  glmmTMB:::useRTMB(FALSE)
+  glmmTMB::useRTMB(FALSE)
   m_tmb <- glmmTMB(
     count ~ mined,
     ziformula = ~ 0 + (1 | site),
@@ -386,7 +383,7 @@ test_that("truncated Poisson: random-only zero inflation", {
 })
 
 test_that("truncated Poisson: simulation is strictly positive", {
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   model <- glmmTMB(
     count ~ mined + (1 | site),
     family = truncated_poisson,
@@ -404,7 +401,7 @@ test_that("truncated Poisson: simulation is strictly positive", {
 })
 
 test_that("truncated Poisson: simulation remains positive for tiny means", {
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   model <- glmmTMB(
     count ~ 1,
     family = truncated_poisson,
@@ -424,7 +421,7 @@ test_that("truncated Poisson: simulation remains positive for tiny means", {
 test_that("truncated Poisson: ZI simulation contains zeros and positives", {
   fixed_map <- factor(NA)
 
-  glmmTMB:::useRTMB(TRUE)
+  local_useRTMB(TRUE)
   model <- glmmTMB(
     count ~ 1,
     ziformula = ~ 1,
