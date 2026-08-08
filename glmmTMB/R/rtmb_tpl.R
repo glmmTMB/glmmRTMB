@@ -238,6 +238,46 @@ dgamma_rtmb <- function(x, mean, shape, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+## Translated from the lognormal_family case in glmmTMB.cpp:1164-1179.
+## The lognormal family is parameterized by mean and SD on the data scale.
+dlognormal_rtmb <- function(x, mean, sd, log = FALSE) {
+  log_var <- RTMB::logspace_add(2 * (log(sd) - log(mean)), 0)
+  meanlog <- log(mean) - log_var / 2
+  sdlog <- sqrt(log_var)
+
+  if (inherits(x, "simref")) {
+    x[] <- stats::rlnorm(length(x), meanlog = as.vector(meanlog),
+                         sdlog = as.vector(sdlog))
+    return(rep(0, length(x)))
+  }
+
+  is_zero <- x == 0
+  if (!any(is_zero)) {
+    ans <- RTMB::dnorm(log(x), meanlog, sdlog, log = TRUE) - log(x)
+  } else {
+    not_zero <- !is_zero
+    if (!any(not_zero)) {
+      return(rep(if (log) -Inf else 0, length(x)))
+    }
+
+    "[<-" <- RTMB::ADoverload("[<-")
+    subset_arg <- function(arg) {
+      if (length(arg) == length(x)) arg[not_zero] else arg
+    }
+    meanlog_nz <- subset_arg(meanlog)
+    sdlog_nz <- subset_arg(sdlog)
+    loglik_nz <- RTMB::dnorm(
+      log(x[not_zero]),
+      meanlog_nz,
+      sdlog_nz,
+      log = TRUE
+    ) - log(x[not_zero])
+    ans <- rep(loglik_nz[1L] * 0 - Inf, length(x))
+    ans[not_zero] <- loglik_nz
+  }
+  if (log) ans else exp(ans)
+}
+
 ## Fitting translates glmmTMB.cpp:1042-1075 for nbinom1/nbinom2:
 ## both families use dnbinom_robust(log_mu, log_var_minus_mu). Simulation
 ## follows the same mean/variance by converting back to size/mu.
@@ -730,6 +770,11 @@ rtmb_tpl <- function(parameters, data) {
     ## Translated from the Gamma_family case in glmmTMB.cpp:991-996.
     Gamma = dZI(dgamma_rtmb)(
       yobs_i, mean = mu[i], shape = phi[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
+    ## Translated from the lognormal_family case in glmmTMB.cpp:1164-1179.
+    lognormal = dZI(dlognormal_rtmb)(
+      yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0
     ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
