@@ -197,6 +197,47 @@ dbinom_robust_rtmb <- function(x, size, logit_p, log = FALSE) {
   RTMB::dbinom_robust(x, size = size, logit_p = logit_p, log = log)
 }
 
+## Translated from the Gamma_family case in glmmTMB.cpp:991-996 and
+## zt_lik_zero(), glmmTMB.cpp:959. Gamma is mean/shape parameterized here:
+## shape = phi and scale = mu / phi. Exact zeros are excluded from the
+## conditional density so zero-inflated Gamma behaves as a hurdle model.
+dgamma_rtmb <- function(x, mean, shape, log = FALSE) {
+  if (inherits(x, "simref")) {
+    x[] <- stats::rgamma(
+      length(x),
+      shape = as.vector(shape),
+      scale = as.vector(mean / shape)
+    )
+    return(rep(0, length(x)))
+  }
+
+  is_zero <- x == 0
+  if (!any(is_zero)) {
+    ans <- RTMB::dgamma(x, shape = shape, scale = mean / shape, log = TRUE)
+  } else {
+    not_zero <- !is_zero
+    if (!any(not_zero)) {
+      return(rep(if (log) -Inf else 0, length(x)))
+    }
+
+    "[<-" <- RTMB::ADoverload("[<-")
+    subset_arg <- function(arg) {
+      if (length(arg) == length(x)) arg[not_zero] else arg
+    }
+    mean_nz <- subset_arg(mean)
+    shape_nz <- subset_arg(shape)
+    loglik_nz <- RTMB::dgamma(
+      x[not_zero],
+      shape = shape_nz,
+      scale = mean_nz / shape_nz,
+      log = TRUE
+    )
+    ans <- rep(loglik_nz[1L] * 0 - Inf, length(x))
+    ans[not_zero] <- loglik_nz
+  }
+  if (log) ans else exp(ans)
+}
+
 ## Fitting translates glmmTMB.cpp:1042-1075 for nbinom1/nbinom2:
 ## both families use dnbinom_robust(log_mu, log_var_minus_mu). Simulation
 ## follows the same mean/variance by converting back to size/mu.
@@ -686,6 +727,11 @@ rtmb_tpl <- function(parameters, data) {
       yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0
     ),
+    ## Translated from the Gamma_family case in glmmTMB.cpp:991-996.
+    Gamma = dZI(dgamma_rtmb)(
+      yobs_i, mean = mu[i], shape = phi[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
     binomial = dZI(dbinom_robust_rtmb)(
       yobs_i, size = size[i], logit_p = logit_mu()[i], eta_zi = eta_zi,
@@ -793,7 +839,7 @@ rtmb_tpl <- function(parameters, data) {
   }
 
   if (ziPredictCode == .valid_zipredictcode[["disp"]]) {
-    mu_pred_all <- phi
+    mu_pred_all <- if (family_name == "Gamma") 1 / sqrt(phi) else phi
     eta_pred_all <- etadisp
   }
 
