@@ -346,6 +346,27 @@ test_that("poisson: conditional random intercept", {
   )
 })
 
+test_that("poisson: estfun retapes with updated RTMB data", {
+  local_useRTMB(TRUE)
+  m_rtmb <- glmmTMB(
+    count ~ DOP + (1 | sample),
+    family = poisson,
+    data = Salamanders
+  )
+  result_rtmb <- expect_silent(sandwich::estfun(m_rtmb))
+
+  glmmTMB::useRTMB(FALSE)
+  m_tmb <- glmmTMB(
+    count ~ DOP + (1 | sample),
+    family = poisson,
+    data = Salamanders
+  )
+  result_tmb <- expect_silent(sandwich::estfun(m_tmb))
+
+  expect_gt(max(abs(result_rtmb)), 1)
+  expect_equal(result_rtmb, result_tmb, tolerance = 1e-3)
+})
+
 test_that("poisson: correlated conditional random slope", {
   local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(

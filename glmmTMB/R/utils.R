@@ -22,6 +22,14 @@ MakeADFun <- function(data, ..., DLL) {
   }
 }
 
+.setObjData <- function(obj, data) {
+  obj$env$data <- data
+  if (!is.null(obj$env$rtmb_data_env)) {
+    obj$env$rtmb_data_env$d <- data
+  }
+  invisible(obj)
+}
+
 ## backward compat (copied from lme4)
 if((Rv <- getRversion()) < "3.2.1") {
     lengths <- function (x, use.names = TRUE) vapply(x, length, 1L, USE.NAMES = use.names)

@@ -1959,7 +1959,8 @@ estfun.glmmTMB <- function(x, full = FALSE, cluster = getGroups(x), rawnames = F
     
     # Save original weights, negative log-likelihood
     # and gradient.
-    original_weights <- x$obj$env$data$weights
+    original_data <- x$obj$env$data
+    original_weights <- original_data$weights
     original_neg_log_lik <- x$obj$fn(x$fit$par)
     env_vars <- c("par", "last.par", "last.par.best", "last.par.ok",
                   "parameters")
@@ -1975,7 +1976,8 @@ estfun.glmmTMB <- function(x, full = FALSE, cluster = getGroups(x), rawnames = F
     # at exit of this function.
     on.exit({
         # Reset the weights to the original values.
-        x$obj$env$data$weights <- original_weights
+        original_data$weights <- original_weights
+        .setObjData(x$obj, original_data)
         for (n in env_vars) {
             assign(n, orig_env_vars[[n]],
                    envir = x$obj$env)
@@ -1993,7 +1995,9 @@ estfun.glmmTMB <- function(x, full = FALSE, cluster = getGroups(x), rawnames = F
         new_weights <- ifelse(belongs_cluster, original_weights, zero_weights)    
 
         # Modify the weights in the TMB object.
-        x$obj$env$data$weights <- new_weights
+        new_data <- original_data
+        new_data$weights <- new_weights
+        .setObjData(x$obj, new_data)
 
         # Retape the TMB object to apply the changes.
         x$obj$retape(set.defaults = FALSE)
