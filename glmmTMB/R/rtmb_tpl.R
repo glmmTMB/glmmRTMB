@@ -278,6 +278,19 @@ dlognormal_rtmb <- function(x, mean, sd, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+## Translated from the t_family case in glmmTMB.cpp:1182-1190.
+## The response is standardized by the fitted scale phi, so the log-density
+## subtracts log(phi), represented by etadisp in the C++ code.
+dt_rtmb <- function(x, mean, scale, df, log = FALSE) {
+  if (inherits(x, "simref")) {
+    x[] <- as.vector(mean) + as.vector(scale) * stats::rt(length(x), df)
+    return(rep(0, length(x)))
+  }
+
+  ans <- RTMB::dt((x - mean) / scale, df = df, log = TRUE) - log(scale)
+  if (log) ans else exp(ans)
+}
+
 ## Fitting translates glmmTMB.cpp:1042-1075 for nbinom1/nbinom2:
 ## both families use dnbinom_robust(log_mu, log_var_minus_mu). Simulation
 ## follows the same mean/variance by converting back to size/mu.
@@ -776,6 +789,11 @@ rtmb_tpl <- function(parameters, data) {
     lognormal = dZI(dlognormal_rtmb)(
       yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
+    ## Translated from the t_family case in glmmTMB.cpp:1182-1190.
+    t = dZI(dt_rtmb)(
+      yobs_i, mean = mu[i], scale = phi[i], df = exp(psi[1L]),
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
     ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
     binomial = dZI(dbinom_robust_rtmb)(
