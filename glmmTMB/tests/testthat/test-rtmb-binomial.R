@@ -65,6 +65,25 @@ test_that("binomial: binary response with fixed effects", {
   )
 })
 
+test_that("binomial: empty fixed-effect prior range is skipped", {
+  local_useRTMB(TRUE)
+  m0 <- glmmTMB(
+    y ~ 1,
+    family = binomial,
+    data = binom_dat,
+    se = FALSE
+  )
+  m_prior <- expect_no_error(glmmTMB(
+    y ~ 1,
+    family = binomial,
+    data = binom_dat,
+    priors = data.frame(prior = "normal(0, 3)", class = "beta"),
+    se = FALSE
+  ))
+
+  expect_equal(logLik(m_prior), logLik(m0), tolerance = tol_logLik)
+})
+
 test_that("binomial: grouped response with weights", {
   local_useRTMB(TRUE)
   m_rtmb <- glmmTMB(

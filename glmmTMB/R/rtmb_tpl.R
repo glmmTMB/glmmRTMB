@@ -528,6 +528,10 @@ prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
 
     par_start <- prior_elstart[i] + 1L
     par_end <- prior_elend[i] + 1L
+    if (par_start > par_end) {
+      par_ind <- par_ind + prior_npar[i]
+      next
+    }
     if (par_start < 1L || par_end > length(parvec)) {
       stop(
         "Bad prior index for prior ", i, ": requested elements ",
