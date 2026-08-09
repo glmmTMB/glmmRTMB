@@ -291,6 +291,36 @@ dt_rtmb <- function(x, mean, scale, df, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+## Translated from glmmtmb::dskewnorm(), distrib.h:78-88, and the
+## skewnormal_family case in glmmTMB.cpp:975-980.
+dskewnormal_rtmb <- function(x, mean, sd, alpha, log = FALSE) {
+  delta <- alpha / sqrt(1 + alpha^2)
+  omega <- sd / sqrt(1 - 2 / pi * delta^2)
+  xi <- mean - omega * delta * sqrt(2 / pi)
+
+  if (inherits(x, "simref")) {
+    n <- length(x)
+    xi <- rep(as.vector(xi), length.out = n)
+    omega <- rep(as.vector(omega), length.out = n)
+    delta <- rep(as.vector(delta), length.out = n)
+    ans <- numeric(n)
+    for (i in seq_len(n)) {
+      chi <- abs(stats::rnorm(1L))
+      nrv <- stats::rnorm(1L)
+      z <- delta[i] * chi + sqrt(1 - delta[i]^2) * nrv
+      ans[i] <- xi[i] + omega[i] * z
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  z <- (x - xi) / omega
+  ans <- log(2) - log(omega) +
+    RTMB::dnorm(z, 0, 1, log = TRUE) +
+    log(RTMB::pnorm(alpha * z))
+  if (log) ans else exp(ans)
+}
+
 ## Fitting translates glmmTMB.cpp:1042-1075 for nbinom1/nbinom2:
 ## both families use dnbinom_robust(log_mu, log_var_minus_mu). Simulation
 ## follows the same mean/variance by converting back to size/mu.
@@ -793,6 +823,11 @@ rtmb_tpl <- function(parameters, data) {
     ## Translated from the t_family case in glmmTMB.cpp:1182-1190.
     t = dZI(dt_rtmb)(
       yobs_i, mean = mu[i], scale = phi[i], df = exp(psi[1L]),
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
+    ## Translated from the skewnormal_family case in glmmTMB.cpp:975-980.
+    skewnormal = dZI(dskewnormal_rtmb)(
+      yobs_i, mean = mu[i], sd = phi[i], alpha = psi[1L],
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
     ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
