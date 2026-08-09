@@ -40,7 +40,9 @@ fixef.glmmTMB <- function(object, ...) {
 
   get_vec <- function(vals, X) {
     dropped <- attr(X, "col.dropped")
-    if (is.null(dropped)) return(setNames(vals, colnames(X)))
+    if (is.null(dropped) || inherits(X, "sparseMatrix")) {
+      return(setNames(vals, colnames(X)))
+    }
     n_tot <- ncol(X) + length(dropped)
     cc <- numeric(n_tot)
     cc[-dropped] <- vals
