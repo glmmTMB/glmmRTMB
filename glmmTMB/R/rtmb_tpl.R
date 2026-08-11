@@ -335,6 +335,44 @@ dnbinom_robust_rtmb <- function(x, log_mu, log_var_minus_mu, log = FALSE) {
                        log = log)
 }
 
+## Translated from glmmtmb::dgenpois(); distrib.h:64-78.
+dgenpois_log_rtmb <- RTMB::Vectorize(
+  function(x, theta, lambda) {
+    term <- theta + lambda * x
+    log(theta) + (x - 1) * log(term) - term - lgamma(x + 1)
+  },
+  vectorize.args = c("x", "theta", "lambda")
+)
+
+## Translated from glmmtmb::rgenpois(); distrib.h:172-183.
+rgenpois_rtmb <- function(theta, lambda) {
+  ans <- 0
+  random_number <- stats::runif(1L)
+  kum <- exp(dgenpois_log_rtmb(0, theta, lambda))
+  while (random_number > kum) {
+    ans <- ans + 1
+    kum <- kum + exp(dgenpois_log_rtmb(ans, theta, lambda))
+  }
+  ans
+}
+
+## Translated from the genpois_family case in glmmTMB.cpp:1128-1133.
+dgenpois_rtmb <- function(x, theta, lambda, log = FALSE) {
+  if (inherits(x, "simref")) {
+    theta <- rep(as.vector(theta), length.out = length(x))
+    lambda <- rep(as.vector(lambda), length.out = length(x))
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      ans[i] <- rgenpois_rtmb(theta[i], lambda[i])
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  ans <- dgenpois_log_rtmb(x, theta, lambda)
+  if (log) ans else exp(ans)
+}
+
 ## Translated from the compois_family case in glmmTMB.cpp:1115-1119.
 ## Fitting uses RTMB::dcompois2(mean, nu); simulation uses RTMB's internal
 ## rcompois2() because the exported density is the fitting interface.
@@ -851,6 +889,11 @@ rtmb_tpl <- function(parameters, data) {
     nbinom12 = dZI(dnbinom_robust_rtmb)(
       yobs_i, log_mu = log_mu()[i], log_var_minus_mu = log_var_minus_mu()[i],
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from the genpois_family case in glmmTMB.cpp:1128-1133.
+    genpois = dZI(dgenpois_rtmb)(
+      yobs_i, theta = mu[i] / sqrt(phi[i]),
+      lambda = 1 - 1 / sqrt(phi[i]), eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0),
     ## Translated from the compois_family case in glmmTMB.cpp:1115-1119.
     compois = dZI(dcompois2_rtmb)(
       yobs_i, mean = mu[i], nu = 1 / phi[i], eta_zi = eta_zi,
