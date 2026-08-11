@@ -23,7 +23,7 @@ mu <- exp(
 )
 phi <- 1.4
 theta <- mu / sqrt(phi)
-lambda <- 1 - 1 / sqrt(phi)
+lambda <- rep(1 - 1 / sqrt(phi), length.out = length(mu))
 truncated_genpois_dat$count <- vapply(
   seq_along(mu),
   function(i) glmmTMB:::rtruncated_genpois_rtmb(theta[i], lambda[i]),
