@@ -356,6 +356,25 @@ rgenpois_rtmb <- function(theta, lambda) {
   ans
 }
 
+## Translated from glmmtmb::rtruncated_genpois(); distrib.h:186-197.
+rtruncated_genpois_rtmb <- function(theta, lambda) {
+  nloop <- 10000L
+  counter <- 0L
+  ans <- rgenpois_rtmb(theta, lambda)
+  while (ans < 1 && counter < nloop) {
+    ans <- rgenpois_rtmb(theta, lambda)
+    counter <- counter + 1L
+  }
+  if (ans < 1) {
+    warning(
+      "Zeros in simulation of zero-truncated data. ",
+      "Possibly due to low estimated mean.",
+      call. = FALSE
+    )
+  }
+  ans
+}
+
 ## Translated from the genpois_family case in glmmTMB.cpp:1128-1133.
 dgenpois_rtmb <- function(x, theta, lambda, log = FALSE) {
   if (inherits(x, "simref")) {
@@ -370,6 +389,36 @@ dgenpois_rtmb <- function(x, theta, lambda, log = FALSE) {
   }
 
   ans <- dgenpois_log_rtmb(x, theta, lambda)
+  if (log) ans else exp(ans)
+}
+
+## Translated from calc_log_nzprob(), glmmTMB.cpp:286-291.
+log_nzprob_truncated_genpois_rtmb <- RTMB::Vectorize(
+  function(theta) RTMB::logspace_sub(0, -theta),
+  vectorize.args = "theta"
+)
+
+## Translated from the truncated_genpois_family case,
+## glmmTMB.cpp:1134-1139.
+dtruncated_genpois_rtmb <- function(x, theta, lambda, log = FALSE) {
+  if (inherits(x, "simref")) {
+    theta <- rep(as.vector(theta), length.out = length(x))
+    lambda <- rep(as.vector(lambda), length.out = length(x))
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      ans[i] <- rtruncated_genpois_rtmb(theta[i], lambda[i])
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  log_nzprob <- log_nzprob_truncated_genpois_rtmb(theta)
+  ans <- dgenpois_log_rtmb(x, theta, lambda) - log_nzprob
+
+  is_zero <- x < 0.001
+  if (any(is_zero)) {
+    ans[is_zero] <- -Inf
+  }
   if (log) ans else exp(ans)
 }
 
@@ -925,6 +974,11 @@ rtmb_tpl <- function(parameters, data) {
       yobs_i, theta = mu[i] / sqrt(phi[i]),
       lambda = 1 - 1 / sqrt(phi[i]), eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from truncated_genpois_family, glmmTMB.cpp:1134-1139.
+    truncated_genpois = dZI(dtruncated_genpois_rtmb)(
+      yobs_i, theta = mu[i] / sqrt(phi[i]),
+      lambda = 1 - 1 / sqrt(phi[i]), eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0),
     ## Translated from the compois_family case in glmmTMB.cpp:1115-1119.
     compois = dZI(dcompois2_rtmb)(
       yobs_i, mean = mu[i], nu = 1 / phi[i], eta_zi = eta_zi,
@@ -987,6 +1041,13 @@ rtmb_tpl <- function(parameters, data) {
     log_nzprob_pred <- log_nzprob_truncated_nbinom2_rtmb(
       log_mu_vector,
       etadisp_vector
+    )
+    mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
+  } else if (family_name == "truncated_genpois") {
+    mu_vector <- mu[seq_along(mu)]
+    phi_vector <- phi[seq_along(phi)]
+    log_nzprob_pred <- log_nzprob_truncated_genpois_rtmb(
+      mu_vector / sqrt(phi_vector)
     )
     mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
   } else if (family_name == "truncated_compois") {
