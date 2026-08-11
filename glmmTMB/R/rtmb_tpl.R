@@ -486,6 +486,35 @@ log_nzprob_truncated_compois_rtmb <- RTMB::Vectorize(
   vectorize.args = c("mean", "nu")
 )
 
+## Translation of glmmtmb::rtruncated_poisson(); distrib.h:94-128.
+rtruncated_poisson_rtmb <- function(mu, k = 0L) {
+  if (mu <= 0) {
+    stop("non-positive mu in k-truncated-poisson simulator")
+  }
+  if (k < 0) {
+    stop("negative k in k-truncated-poisson simulator")
+  }
+
+  mdoub <- max(k + 1 - mu, 0)
+  m <- ceiling(mdoub)
+
+  repeat {
+    x <- stats::rpois(1L, mu) + m
+    if (m > 0) {
+      a <- 1
+      u <- stats::runif(1L)
+      for (j in seq_len(m) - 1L) {
+        a <- a * (k + 1 - j) / (x - j)
+      }
+      if (u < a && x > k) {
+        return(x)
+      }
+    } else if (x > k) {
+      return(x)
+    }
+  }
+}
+
 ## Translated from calc_log_nzprob() and truncated_compois_family,
 ## glmmTMB.cpp:293-294 and 1121-1127.
 dtruncated_compois2_rtmb <- function(x, mean, nu, log = FALSE) {
@@ -566,10 +595,12 @@ dtruncated_nbinom2_rtmb <- function(x, log_mu, log_var_minus_mu, log_size,
 ## zero-truncated poisson density
 dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
   if (inherits(x, "simref")) {
-    ## Draw from the conditional upper tail
-    # expm1() helps for accuracy when lambda is close to zero.
-    upper_prob <- stats::runif(length(x)) * (-expm1(-lambda))
-    x[] <- stats::qpois(upper_prob, lambda = lambda, lower.tail = FALSE)
+    lambda <- rep(as.vector(lambda), length.out = length(x))
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      ans[i] <- rtruncated_poisson_rtmb(lambda[i], k = 0L)
+    }
+    x[] <- ans
     return(rep(0, length(x)))
   }
 
