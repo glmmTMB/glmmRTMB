@@ -18,11 +18,12 @@ logit_inverse_linkfun_rtmb <- function(eta, link) {
   switch(
     names(link),
     logit = eta,
+    probit = RTMB::pnorm(eta, log.p = TRUE) -
+      RTMB::pnorm(eta, lower.tail = FALSE, log.p = TRUE),
+    cloglog = RTMB::logspace_sub(exp(eta), 0),
     {
       mu <- switch(
         names(link),
-        probit = RTMB::pnorm(eta),
-        cloglog = 1 - exp(-exp(eta)),
         log = exp(eta),
         identity = eta,
         sqrt = eta * eta,
@@ -195,6 +196,46 @@ dbinom_robust_rtmb <- function(x, size, logit_p, log = FALSE) {
     return(RTMB::dbinom(x, size = size, prob = prob, log = log))
   }
   RTMB::dbinom_robust(x, size = size, logit_p = logit_p, log = log)
+}
+
+## Translated from glmmtmb::logspace_gamma(), distrib.h:27-47.
+## This avoids lgamma(exp(x)) underflow for very small x, matching the C++
+## stable beta-binomial density helper.
+logspace_gamma_rtmb <- RTMB::Vectorize(
+  function(x) {
+    `if` <- RTMB::ADoverload("if")
+    if (x < -150) -x else lgamma(exp(x))
+  },
+  vectorize.args = "x"
+)
+
+## Translated from glmmtmb::dbetabinom_robust(), distrib.h:49-62, and
+## the betabinomial_family case in glmmTMB.cpp:1037-1047.
+dbetabinom_robust_rtmb <- function(x, log_shape1, log_shape2, size,
+                                   log = FALSE) {
+  if (inherits(x, "simref")) {
+    log_shape1 <- rep(as.vector(log_shape1), length.out = length(x))
+    log_shape2 <- rep(as.vector(log_shape2), length.out = length(x))
+    size <- rep(as.vector(size), length.out = length(x))
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      prob <- stats::rbeta(1L, exp(log_shape1[i]), exp(log_shape2[i]))
+      ans[i] <- stats::rbinom(1L, size = size[i], prob = prob)
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  log_x <- log(x)
+  log_size_minus_x <- log(size - x)
+  ans <-
+    lgamma(size + 1) - lgamma(x + 1) - lgamma(size - x + 1) +
+    logspace_gamma_rtmb(RTMB::logspace_add(log_x, log_shape1)) +
+    logspace_gamma_rtmb(RTMB::logspace_add(log_size_minus_x, log_shape2)) -
+    lgamma(size + exp(log_shape1) + exp(log_shape2)) +
+    lgamma(exp(log_shape1) + exp(log_shape2)) -
+    logspace_gamma_rtmb(log_shape1) - logspace_gamma_rtmb(log_shape2)
+  if (log) ans else exp(ans)
 }
 
 ## Translated from the Gamma_family case in glmmTMB.cpp:991-996 and
@@ -1002,6 +1043,17 @@ rtmb_tpl <- function(parameters, data) {
     binomial = dZI(dbinom_robust_rtmb)(
       yobs_i, size = size[i], logit_p = logit_mu()[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0),
+    ## Translated from betabinomial_family, glmmTMB.cpp:1037-1047.
+    betabinomial = {
+      logit_p <- logit_mu()[i]
+      dZI(dbetabinom_robust_rtmb)(
+        yobs_i,
+        log_shape1 = -RTMB::logspace_add(0, -logit_p) + etadisp[i],
+        log_shape2 = -RTMB::logspace_add(0, logit_p) + etadisp[i],
+        size = size[i], eta_zi = eta_zi, log = TRUE,
+        is_zero = yobs_obs[i] == 0
+      )
+    },
     ## Translated from the nbinom1_family case in glmmTMB.cpp:1042-1056.
     nbinom1 = dZI(dnbinom_robust_rtmb)(
       yobs_i, log_mu = log_mu()[i], log_var_minus_mu = log_var_minus_mu()[i],
