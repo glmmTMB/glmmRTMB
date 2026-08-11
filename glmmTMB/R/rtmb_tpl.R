@@ -238,6 +238,51 @@ dgamma_rtmb <- function(x, mean, shape, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+## Translated from the beta_family case in glmmTMB.cpp:997-1002 and
+## zt_lik_zero(), glmmTMB.cpp:959. The beta family uses Ferrari-Cribari-Neto
+## parameterization: shape1 = mu * phi and shape2 = (1 - mu) * phi. Exact zeros
+## are excluded from the conditional density so zero-inflated beta behaves as a
+## hurdle model.
+dbeta_rtmb <- function(x, mean, phi, log = FALSE) {
+  shape1 <- mean * phi
+  shape2 <- (1 - mean) * phi
+
+  if (inherits(x, "simref")) {
+    x[] <- stats::rbeta(
+      length(x),
+      shape1 = as.vector(shape1),
+      shape2 = as.vector(shape2)
+    )
+    return(rep(0, length(x)))
+  }
+
+  is_zero <- x == 0
+  if (!any(is_zero)) {
+    ans <- RTMB::dbeta(x, shape1 = shape1, shape2 = shape2, log = TRUE)
+  } else {
+    not_zero <- !is_zero
+    if (!any(not_zero)) {
+      return(rep(if (log) -Inf else 0, length(x)))
+    }
+
+    "[<-" <- RTMB::ADoverload("[<-")
+    subset_arg <- function(arg) {
+      if (length(arg) == length(x)) arg[not_zero] else arg
+    }
+    shape1_nz <- subset_arg(shape1)
+    shape2_nz <- subset_arg(shape2)
+    loglik_nz <- RTMB::dbeta(
+      x[not_zero],
+      shape1 = shape1_nz,
+      shape2 = shape2_nz,
+      log = TRUE
+    )
+    ans <- rep(loglik_nz[1L] * 0 - Inf, length(x))
+    ans[not_zero] <- loglik_nz
+  }
+  if (log) ans else exp(ans)
+}
+
 ## Translated from the lognormal_family case in glmmTMB.cpp:1164-1179.
 ## The lognormal family is parameterized by mean and SD on the data scale.
 dlognormal_rtmb <- function(x, mean, sd, log = FALSE) {
@@ -933,6 +978,11 @@ rtmb_tpl <- function(parameters, data) {
       yobs_i, mean = mu[i], shape = phi[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0
     ),
+    ## Translated from the beta_family case in glmmTMB.cpp:997-1002.
+    beta = dZI(dbeta_rtmb)(
+      yobs_i, mean = mu[i], phi = phi[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
     ## Translated from the lognormal_family case in glmmTMB.cpp:1164-1179.
     lognormal = dZI(dlognormal_rtmb)(
       yobs_i, mean = mu[i], sd = phi[i], eta_zi = eta_zi,
@@ -1240,6 +1290,44 @@ tmb_unstructured_corr <- function(n, theta) {
     }
   }
   corr
+}
+
+## Simulation factor for density::UNSTRUCTURED_CORR_t, used in
+## glmmTMB.cpp:407-425. This preserves the C++ simulation order for us()
+## random effects instead of delegating simulation to RTMB::dmvnorm().
+tmb_unstructured_sim_factor <- function(n, theta) {
+  expected <- n * (n - 1L) / 2L
+  if (length(theta) != expected) {
+    stop(
+      "Expected ", expected, " correlation parameters for unstructured ",
+      n, " by ", n, " simulation factor, got ", length(theta)
+    )
+  }
+
+  L <- diag(n)
+  k <- 1L
+  for (i in seq_len(n)) {
+    for (j in seq_len(n)) {
+      if (i > j) {
+        L[i, j] <- theta[k]
+        k <- k + 1L
+      }
+    }
+  }
+
+  L / sqrt(rowSums(L * L))
+}
+
+simulate_tmb_unstructured <- function(U, sd, corr_par) {
+  n <- nrow(U)
+  reps <- ncol(U)
+  sim_factor <- tmb_unstructured_sim_factor(n, as.vector(corr_par))
+  sim_sd <- as.vector(sd)
+
+  for (j in seq_len(reps)) {
+    U_col <- U[, j]
+    U_col[] <- sim_sd * as.vector(sim_factor %*% stats::rnorm(n))
+  }
 }
 
 ## Evaluate one random-effects term under its covariance structure
@@ -1620,6 +1708,11 @@ termwise_nll <- function(U, theta, term) {
         simulate_density <- FALSE
       } else if (term$simCode == .valid_simcode[["fix"]]) {
         U[] <- U$getOrig(seq_along(U))
+        simulate_density <- FALSE
+      } else if (
+        name == "us" && term$simCode == .valid_simcode[["random"]]
+      ) {
+        simulate_tmb_unstructured(U, sd, corr_par)
         simulate_density <- FALSE
       }
     } else if (
