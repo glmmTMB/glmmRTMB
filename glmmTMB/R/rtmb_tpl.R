@@ -324,6 +324,68 @@ dbeta_rtmb <- function(x, mean, phi, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+## Translated from the ordbeta_family case in glmmTMB.cpp:1004-1031.
+dordbeta_rtmb <- function(x, eta, mean, phi, cutpoints, log = FALSE) {
+  if (inherits(x, "simref")) {
+    eta <- as.vector(eta)
+    mean <- as.vector(mean)
+    phi <- as.vector(phi)
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      if (stats::runif(1L) < stats::plogis(cutpoints[1L] - eta[i])) {
+        ans[i] <- 0
+      } else if (stats::runif(1L) < stats::plogis(eta[i] - cutpoints[2L])) {
+        ans[i] <- 1
+      } else {
+        ans[i] <- stats::rbeta(
+          1L,
+          shape1 = mean[i] * phi[i],
+          shape2 = (1 - mean[i]) * phi[i]
+        )
+      }
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  "[<-" <- RTMB::ADoverload("[<-")
+  is_zero <- x == 0
+  is_one <- x == 1
+  is_interior <- !is_zero & !is_one
+  ans <- eta * 0
+
+  if (any(is_zero)) {
+    ans[is_zero] <- -RTMB::logspace_add(
+      0,
+      eta[is_zero] - cutpoints[1L]
+    )
+  }
+  if (any(is_one)) {
+    ans[is_one] <- -RTMB::logspace_add(
+      0,
+      cutpoints[2L] - eta[is_one]
+    )
+  }
+  if (any(is_interior)) {
+    log_lower <- -RTMB::logspace_add(
+      0,
+      cutpoints[1L] - eta[is_interior]
+    )
+    log_upper <- -RTMB::logspace_add(
+      0,
+      cutpoints[2L] - eta[is_interior]
+    )
+    log_middle <- RTMB::logspace_sub(log_lower, log_upper)
+    ans[is_interior] <- log_middle + RTMB::dbeta(
+      x[is_interior],
+      shape1 = mean[is_interior] * phi[is_interior],
+      shape2 = (1 - mean[is_interior]) * phi[is_interior],
+      log = TRUE
+    )
+  }
+  if (log) ans else exp(ans)
+}
+
 ## Translated from the lognormal_family case in glmmTMB.cpp:1164-1179.
 ## The lognormal family is parameterized by mean and SD on the data scale.
 dlognormal_rtmb <- function(x, mean, sd, log = FALSE) {
@@ -1023,6 +1085,11 @@ rtmb_tpl <- function(parameters, data) {
     beta = dZI(dbeta_rtmb)(
       yobs_i, mean = mu[i], phi = phi[i], eta_zi = eta_zi,
       log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
+    ## Translated from the ordbeta_family case in glmmTMB.cpp:1004-1031.
+    ordbeta = dZI(dordbeta_rtmb)(
+      yobs_i, eta = eta[i], mean = mu[i], phi = phi[i], cutpoints = psi,
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
     ),
     ## Translated from the lognormal_family case in glmmTMB.cpp:1164-1179.
     lognormal = dZI(dlognormal_rtmb)(
