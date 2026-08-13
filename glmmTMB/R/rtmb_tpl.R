@@ -1106,6 +1106,12 @@ rtmb_tpl <- function(parameters, data) {
       yobs_i, mean = mu[i], sd = phi[i], alpha = psi[1L],
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
     ),
+    ## Translated from the tweedie_family case in glmmTMB.cpp:1155-1163.
+    tweedie = dZI(RTMB::dtweedie)(
+      yobs_i, mu = mu[i], phi = phi[i],
+      p = 1 / (1 + exp(-psi[1L])) + 1,
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
     binomial = dZI(dbinom_robust_rtmb)(
       yobs_i, size = size[i], logit_p = logit_mu()[i], eta_zi = eta_zi,
