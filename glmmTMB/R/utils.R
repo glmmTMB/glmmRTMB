@@ -4,7 +4,7 @@
 #' @param flag FALSE (default) to use TMB backend; TRUE to use RTMB backend
 #' @export
 useRTMB <- local({
-  useRTMB <- TRUE
+  useRTMB <- FALSE
   function(flag = NULL) { useRTMB <<- flag %||% useRTMB ; useRTMB }
 })
 MakeADFun <- function(data, ..., DLL) {
