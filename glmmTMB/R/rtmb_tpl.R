@@ -238,6 +238,88 @@ dbetabinom_robust_rtmb <- function(x, log_shape1, log_shape2, size,
   if (log) ans else exp(ans)
 }
 
+## Mean-parameterized Conway-Maxwell-Binomial density; translated from
+## dcombinom2() and combinom_utils in TMB's distributions_R.hpp:660-695 and
+## tiny_ad/compois/combinom.hpp:1-96.
+combinom_logZ_rtmb <- function(logit_p, nu, size) {
+  ans <- -Inf
+  for (k in 0:size) {
+    ans <- RTMB::logspace_add(
+      ans,
+      nu * lchoose(size, k) + k * logit_p
+    )
+  }
+  ans
+}
+
+combinom_moments_rtmb <- function(logit_p, nu, size) {
+  log_z <- combinom_logZ_rtmb(logit_p, nu, size)
+  mean <- second_moment <- 0
+  for (k in 0:size) {
+    probability <- exp(
+      nu * lchoose(size, k) + k * logit_p - log_z
+    )
+    mean <- mean + k * probability
+    second_moment <- second_moment + k * k * probability
+  }
+  list(mean = mean, variance = second_moment - mean * mean)
+}
+
+combinom_logitp_rtmb <- function(mean, nu, size) {
+  "if" <- RTMB::ADoverload("if")
+  lower <- -30
+  upper <- 30
+  for (i in seq_len(10L)) {
+    midpoint <- (lower + upper) / 2
+    midpoint_mean <- combinom_moments_rtmb(midpoint, nu, size)$mean
+    new_lower <- if (midpoint_mean > mean) lower else midpoint
+    new_upper <- if (midpoint_mean > mean) midpoint else upper
+    lower <- new_lower
+    upper <- new_upper
+  }
+
+  logit_p <- (lower + upper) / 2
+  for (i in seq_len(5L)) {
+    moments <- combinom_moments_rtmb(logit_p, nu, size)
+    logit_p <- logit_p - (moments$mean - mean) / moments$variance
+  }
+  logit_p
+}
+
+rcombinom2_rtmb <- function(mean, nu, size) {
+  logit_p <- combinom_logitp_rtmb(mean, nu, size)
+  log_weights <- vapply(
+    0:size,
+    function(k) nu * lchoose(size, k) + k * logit_p,
+    numeric(1)
+  )
+  weights <- exp(log_weights - max(log_weights))
+  random_number <- stats::runif(1L) * sum(weights)
+  which(cumsum(weights) >= random_number)[1L] - 1L
+}
+
+dcombinom2_rtmb <- function(x, size, mean, nu, log = FALSE) {
+  if (inherits(x, "simref")) {
+    mean <- as.vector(mean)
+    nu <- as.vector(nu)
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      ans[i] <- rcombinom2_rtmb(mean[i], nu[i], size[i])
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  "[<-" <- RTMB::ADoverload("[<-")
+  ans <- mean * 0
+  for (i in seq_along(x)) {
+    logit_p <- combinom_logitp_rtmb(mean[i], nu[i], size[i])
+    ans[i] <- nu[i] * lchoose(size[i], x[i]) + x[i] * logit_p -
+      combinom_logZ_rtmb(logit_p, nu[i], size[i])
+  }
+  if (log) ans else exp(ans)
+}
+
 ## Translated from the Gamma_family case in glmmTMB.cpp:991-996 and
 ## zt_lik_zero(), glmmTMB.cpp:959. Gamma is mean/shape parameterized here:
 ## shape = phi and scale = mu / phi. Exact zeros are excluded from the
@@ -1043,7 +1125,8 @@ utils::globalVariables(c(
   "betazi", "bzi", "thetazi",
   "Xdisp", "XdispS", "Zdisp", "dispoffset", "termsdisp",
   "betadisp", "bdisp", "thetadisp",
-  "psi", "ziPredictCode", "doPredict", "whichPredict", "aggregate",
+  "psi", "combinom_disp_link", "ziPredictCode", "doPredict",
+  "whichPredict", "aggregate",
   "prior_distrib", "prior_whichpar", "prior_elstart", "prior_elend",
   "prior_npar", "prior_params"
 ))
@@ -1109,6 +1192,9 @@ rtmb_tpl <- function(parameters, data) {
   etadisp <- Xdispc %*% betadisp + Zdisp %*% bdisp + dispoffset
   etadisp <- as.vector(etadisp)
   phi <- exp(etadisp)
+  if (family_name == "combinomial" && combinom_disp_link == 1L) {
+    phi <- etadisp
+  }
 
   ## Observation likelihoods; adapted from glmmTMB.cpp:961-978,
   ## 1095-1101, and 1180-1199
@@ -1190,6 +1276,11 @@ rtmb_tpl <- function(parameters, data) {
         is_zero = yobs_obs[i] == 0
       )
     },
+    ## Translated from combinomial_family, glmmTMB.cpp:1049-1067.
+    combinomial = dZI(dcombinom2_rtmb)(
+      yobs_i, size = size[i], mean = mu[i] * size[i], nu = phi[i],
+      eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
     ## Translated from the nbinom1_family case in glmmTMB.cpp:1042-1056.
     nbinom1 = dZI(dnbinom_robust_rtmb)(
       yobs_i, log_mu = log_mu()[i], log_var_minus_mu = log_var_minus_mu()[i],
