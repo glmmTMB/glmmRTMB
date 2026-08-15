@@ -540,6 +540,64 @@ dgenpois_rtmb <- function(x, theta, lambda, log = FALSE) {
   if (log) ans else exp(ans)
 }
 
+## AD-compatible Lambert W transformation used by the Bell family; translated
+## from glmmtmb::LambertW(), distrib.h:486-521.
+lambertW_rtmb <- RTMB::Vectorize(
+  function(x) {
+    y <- log1p(x)
+    for (i in seq_len(12L)) {
+      y <- y - (y - x * exp(-y)) / (1 + y)
+    }
+    y
+  },
+  vectorize.args = "x"
+)
+
+## Translation of glmmtmb::Bell(), distrib.h:442-464.
+bell_number_rtmb <- function(n) {
+  if (n < 2L) {
+    return(1)
+  }
+
+  bell <- bell_new <- numeric(n)
+  bell[1L] <- 1
+  for (i in seq_len(n - 1L)) {
+    bell_new[1L] <- bell[i]
+    for (j in seq_len(i)) {
+      bell_new[j + 1L] <- bell[j] + bell_new[j]
+    }
+    bell <- bell_new
+  }
+  bell_new[n]
+}
+
+## Translation of glmmtmb::rbell() and glmmtmb::dbell(),
+## distrib.h:417-432 and 466-478.
+dbell_rtmb <- function(x, mean, log = FALSE) {
+  theta <- lambertW_rtmb(mean)
+  if (inherits(x, "simref")) {
+    theta <- as.vector(theta)
+    ans <- numeric(length(x))
+    for (i in seq_along(ans)) {
+      n_compound <- stats::rpois(1L, expm1(theta[i]))
+      if (n_compound > 0L) {
+        ans[i] <- sum(vapply(
+          seq_len(n_compound),
+          function(j) rtruncated_poisson_rtmb(theta[i]),
+          numeric(1)
+        ))
+      }
+    }
+    x[] <- ans
+    return(rep(0, length(x)))
+  }
+
+  bell_number <- vapply(as.integer(x), bell_number_rtmb, numeric(1))
+  ans <- x * log(theta) - exp(theta) + 1 +
+    log(bell_number) - lgamma(x + 1)
+  if (log) ans else exp(ans)
+}
+
 ## Translated from calc_log_nzprob(), glmmTMB.cpp:286-291.
 log_nzprob_truncated_genpois_rtmb <- RTMB::Vectorize(
   function(theta) RTMB::logspace_sub(0, -theta),
@@ -1111,6 +1169,11 @@ rtmb_tpl <- function(parameters, data) {
       yobs_i, mu = mu[i], phi = phi[i],
       p = 1 / (1 + exp(-psi[1L])) + 1,
       eta_zi = eta_zi, log = TRUE, is_zero = yobs_obs[i] == 0
+    ),
+    ## Translated from the bell_family case in glmmTMB.cpp:1191-1200.
+    bell = dZI(dbell_rtmb)(
+      yobs_i, mean = mu[i], eta_zi = eta_zi,
+      log = TRUE, is_zero = yobs_obs[i] == 0
     ),
     ## Translated from the binomial_family case in glmmTMB.cpp:979-983.
     binomial = dZI(dbinom_robust_rtmb)(
