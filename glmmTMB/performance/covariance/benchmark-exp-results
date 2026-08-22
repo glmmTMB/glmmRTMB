@@ -1,0 +1,39 @@
+## Results (original brute force implementation)
+
+low-dimensional volcano example
+       backend run elapsed_seconds
+ installed TMB   1           0.202
+ installed TMB   2           0.221
+ installed TMB   3           0.222
+    local RTMB   1           0.693
+    local RTMB   2           0.558
+    local RTMB   3           0.610
+high-dimensional spatial block (n=300)
+       backend run elapsed_seconds
+ installed TMB   1           1.681
+ installed TMB   2           1.681
+ installed TMB   3           1.741
+    local RTMB   1          17.164
+    local RTMB   2          16.778
+    local RTMB   3          18.496
+
+
+## Results (after vectorizing exp covariance structure)
+
+low-dimensional volcano example (n=100)
+       backend run elapsed_seconds
+ installed TMB   1           0.225
+ installed TMB   2           0.224
+ installed TMB   3           0.226
+    local RTMB   1           0.362
+    local RTMB   2           0.249
+    local RTMB   3           0.223
+
+high-dimensional spatial block (n=300)
+       backend run elapsed_seconds
+ installed TMB   1           1.694
+ installed TMB   2           1.687
+ installed TMB   3           1.694
+    local RTMB   1           1.740
+    local RTMB   2           1.824
+    local RTMB   3           1.742
