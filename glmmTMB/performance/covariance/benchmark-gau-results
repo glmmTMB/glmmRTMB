@@ -1,0 +1,39 @@
+## Results (original brute force implementation)
+low-dimension = 100 x 100
+high-dimension = 300x300
+
+                            case       backend run elapsed_seconds
+ low-dimensional volcano example installed TMB   1           0.734
+ low-dimensional volcano example installed TMB   2           0.712
+ low-dimensional volcano example installed TMB   3           0.709
+ low-dimensional volcano example    local RTMB   1           1.171
+ low-dimensional volcano example    local RTMB   2           1.037
+ low-dimensional volcano example    local RTMB   3           1.071
+
+                           case       backend run elapsed_seconds
+ high-dimensional spatial block installed TMB   1           2.000
+ high-dimensional spatial block installed TMB   2           2.011
+ high-dimensional spatial block installed TMB   3           2.078
+ high-dimensional spatial block    local RTMB   1          18.067
+ high-dimensional spatial block    local RTMB   2          18.577
+ high-dimensional spatial block    local RTMB   3          19.395
+
+
+
+## Results (after vectorizing exp covariance structure)
+
+                            case       backend run elapsed_seconds
+ low-dimensional volcano example installed TMB   1           0.683
+ low-dimensional volcano example installed TMB   2           0.717
+ low-dimensional volcano example installed TMB   3           0.699
+ low-dimensional volcano example    local RTMB   1           0.823
+ low-dimensional volcano example    local RTMB   2           0.702
+ low-dimensional volcano example    local RTMB   3           0.699
+
+                           case       backend run elapsed_seconds
+ high-dimensional spatial block installed TMB   1           2.195
+ high-dimensional spatial block installed TMB   2           2.272
+ high-dimensional spatial block installed TMB   3           2.275
+ high-dimensional spatial block    local RTMB   1           2.088
+ high-dimensional spatial block    local RTMB   2           2.078
+ high-dimensional spatial block    local RTMB   3           2.148

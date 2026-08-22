@@ -1899,18 +1899,7 @@ termwise_nll <- function(U, theta, term) {
           " and blockSize=", n
         )
       }
-      corr <- matrix(0, n, n)
-      for (i in seq_len(n)) {
-        for (j in seq_len(n)) {
-          corr[i, j] <- if (i == j) {
-            1
-          } else {
-            exp(
-              -(spatial_dist[i, j]^2) * exp(-2 * corr_par[1L])
-            )
-          }
-        }
-      }
+      corr <- exp(-(spatial_dist^2) * exp(-2 * corr_par[1L]))
       corr
     },
 
