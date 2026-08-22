@@ -20,7 +20,7 @@ high-dimension = 300x300
 
 
 
-## Results (after vectorizing exp covariance structure)
+## Results (after vectorizing gau covariance structure)
 
                             case       backend run elapsed_seconds
  low-dimensional volcano example installed TMB   1           0.683

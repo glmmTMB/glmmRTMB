@@ -1,0 +1,36 @@
+## Results (original brute force implementation)
+
+                            case       backend run elapsed_seconds
+ low-dimensional volcano example installed TMB   1           0.269
+ low-dimensional volcano example installed TMB   2           0.266
+ low-dimensional volcano example installed TMB   3           0.280
+ low-dimensional volcano example    local RTMB   1           0.904
+ low-dimensional volcano example    local RTMB   2           0.892
+ low-dimensional volcano example    local RTMB   3           0.813
+
+                           case       backend run elapsed_seconds
+ high-dimensional spatial block installed TMB   1           1.997
+ high-dimensional spatial block installed TMB   2           2.039
+ high-dimensional spatial block installed TMB   3           1.947
+ high-dimensional spatial block    local RTMB   1          18.592
+ high-dimensional spatial block    local RTMB   2          18.158
+ high-dimensional spatial block    local RTMB   3          24.906
+
+
+## Results (after vectorizing mat covariance structure)
+
+                            case       backend run elapsed_seconds
+ low-dimensional volcano example installed TMB   1           0.275
+ low-dimensional volcano example installed TMB   2           0.308
+ low-dimensional volcano example installed TMB   3           0.310
+ low-dimensional volcano example    local RTMB   1           0.406
+ low-dimensional volcano example    local RTMB   2           0.297
+ low-dimensional volcano example    local RTMB   3           0.300
+
+                           case       backend run elapsed_seconds
+ high-dimensional spatial block installed TMB   1           2.087
+ high-dimensional spatial block installed TMB   2           2.074
+ high-dimensional spatial block installed TMB   3           2.050
+ high-dimensional spatial block    local RTMB   1           2.093
+ high-dimensional spatial block    local RTMB   2           2.120
+ high-dimensional spatial block    local RTMB   3           2.019

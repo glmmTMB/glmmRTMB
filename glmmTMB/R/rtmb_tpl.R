@@ -1917,22 +1917,19 @@ termwise_nll <- function(U, theta, term) {
       }
       range <- exp(corr_par[1L])
       smoothness <- exp(corr_par[2L])
-      corr <- matrix(0, n, n)
-      for (i in seq_len(n)) {
-        for (j in seq_len(n)) {
-          if (i == j) {
-            corr[i, j] <- 1
-          } else {
-            scaled_dist <- spatial_dist[i, j] / range
-            corr[i, j] <-
-              scaled_dist^smoothness * RTMB::besselK(
-                scaled_dist,
-                smoothness
-              ) /
-              (exp(lgamma(smoothness)) * 2^(smoothness - 1))
-          }
-        }
-      }
+      scaled_dist <- spatial_dist / range
+      diagonal <- row(scaled_dist) == col(scaled_dist)
+      scaled_dist[diagonal] <- 1
+      matern_corr <- RTMB::Vectorize(
+        function(d) {
+          d^smoothness * RTMB::besselK(d, smoothness) /
+            (exp(lgamma(smoothness)) * 2^(smoothness - 1))
+        },
+        vectorize.args = "d"
+      )
+      corr <- matern_corr(as.vector(scaled_dist))
+      dim(corr) <- c(n, n)
+      corr[diagonal] <- 1
       corr
     },
     stop(
