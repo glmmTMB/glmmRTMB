@@ -1824,17 +1824,10 @@ termwise_nll <- function(U, theta, term) {
     ## Toeplitz covariance; glmmTMB.cpp:474-506
     toep = {
       corr_params <- corr_par / sqrt(1 + corr_par^2)
-      corr <- matrix(0, n, n)
-      for (i in seq_len(n)) {
-        for (j in seq_len(n)) {
-          corr[i, j] <- if (i == j) {
-            1
-          } else {
-            corr_params[abs(i - j)]
-          }
-        }
-      }
-
+      lag <- abs(row(diag(n)) - col(diag(n)))
+      corr <- diag(n)
+      off_diagonal <- lag > 0
+      corr[off_diagonal] <- corr_params[lag[off_diagonal]]
       corr
     },
 
