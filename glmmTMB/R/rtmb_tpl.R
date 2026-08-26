@@ -1860,14 +1860,8 @@ termwise_nll <- function(U, theta, term) {
         )
       }
       decay <- exp(corr_par[1L])
-      corr <- matrix(0, n, n)
-      for (i in seq_len(n)) {
-        for (j in seq_len(n)) {
-          corr[i, j] <- exp(
-            -decay * abs(times[i] - times[j])
-          )
-        }
-      }
+      time_dist <- abs(outer(times, times, "-"))
+      corr <- exp(-decay * time_dist)
       corr
     },
 
