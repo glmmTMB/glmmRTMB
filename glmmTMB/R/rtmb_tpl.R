@@ -1834,13 +1834,12 @@ termwise_nll <- function(U, theta, term) {
     ## Homogeneous AR(1) covariance; glmmTMB.cpp:507-590
     ar1 = {
       phi <- corr_par[1L] / sqrt(1 + corr_par[1L]^2)
-      corr <- matrix(0, n, n)
-      for (i in seq_len(n)) {
-        for (j in seq_len(n)) {
-          corr[i, j] <- phi^abs(i - j)
-        }
+      if (term$fullCor == 0) {
+        matrix(numeric(0), 0, 0)
+      } else {
+        lag <- abs(row(diag(n)) - col(diag(n)))
+        phi^lag
       }
-      corr
     },
 
     ## OU covariance; glmmTMB.cpp:593-650
@@ -1980,6 +1979,12 @@ termwise_nll <- function(U, theta, term) {
 
     for (k in seq_len(n)) {
       nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
+    }
+  } else if (density_structure == "ar1") {
+    nll <- 0
+
+    for (k in seq_len(reps)) {
+      nll <- nll - RTMB::dautoreg(U[, k], phi = phi, log = TRUE, scale = sd)
     }
   } else {
     ## Keep scale dimensions identical to t(U). A bare vector is ambiguous to
