@@ -1,0 +1,32 @@
+## Results (original brute force implementation)
+
+low-dimensional Toeplitz block n=20
+       backend run elapsed_seconds
+ installed TMB   1           2.269
+ installed TMB   2           2.023
+ installed TMB   3           2.318
+    local RTMB   1           2.142
+    local RTMB   2           2.077
+    local RTMB   3           2.046
+
+high-dimensional Toeplitz block n=100
+       backend run elapsed_seconds
+ installed TMB   1          58.294
+ installed TMB   2          59.920
+ installed TMB   3          58.387
+    local RTMB   1          62.825
+    local RTMB   2          63.626
+    local RTMB   3          63.682
+
+## Results (after vectorizing toep covariance structure)
+
+    low-dimensional Toeplitz block
+       backend run elapsed_seconds
+ installed TMB   1           2.022
+    local RTMB   1           2.027
+
+
+high-dimensional Toeplitz block
+       backend run elapsed_seconds
+ installed TMB   1          58.392
+    local RTMB   1          61.878

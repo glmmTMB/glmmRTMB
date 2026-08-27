@@ -1,0 +1,41 @@
+## Results (original brute force implementation)
+
+low-dimensional OU block
+       backend run elapsed_seconds
+ installed TMB   1           0.020
+ installed TMB   2           0.020
+ installed TMB   3           0.020
+    local RTMB   1           0.640
+    local RTMB   2           0.472
+    local RTMB   3           0.542
+
+high-dimensional OU block
+       backend run elapsed_seconds
+ installed TMB   1           0.032
+ installed TMB   2           0.033
+ installed TMB   3           0.032
+    local RTMB   1          17.393
+    local RTMB   2          17.419
+    local RTMB   3          17.549
+
+## Results (after vectorizing ou covariance structure)
+
+low-dimensional OU block
+       backend run elapsed_seconds
+ installed TMB   1           0.023
+ installed TMB   2           0.021
+ installed TMB   3           0.020
+    local RTMB   1           0.262
+    local RTMB   2           0.152
+    local RTMB   3           0.153
+
+high-dimensional OU block
+       backend run elapsed_seconds
+ installed TMB   1           0.031
+ installed TMB   2           0.030
+ installed TMB   3           0.030
+    local RTMB   1           1.652
+    local RTMB   2           1.684
+    local RTMB   3           1.705
+3
+
