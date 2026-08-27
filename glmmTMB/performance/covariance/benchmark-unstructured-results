@@ -1,0 +1,117 @@
+## Results (original version using tmb_unstructured_corr())
+
+low-dimensional us block (n=5)
+ structure       backend run elapsed_seconds
+        us installed TMB   1           0.086
+        us installed TMB   2           0.089
+        us installed TMB   3           0.086
+        us    local RTMB   1           0.339
+        us    local RTMB   2           0.068
+        us    local RTMB   3           0.071
+
+high-dimensional us block (n=20)
+ structure       backend run elapsed_seconds
+        us installed TMB   1           0.703
+        us installed TMB   2           0.708
+        us installed TMB   3           0.701
+        us    local RTMB   1           1.647
+        us    local RTMB   2           1.653
+        us    local RTMB   3           1.712
+
+low-dimensional propto block (n=5)
+ structure       backend run elapsed_seconds
+    propto installed TMB   1           0.012
+    propto installed TMB   2           0.011
+    propto installed TMB   3           0.011
+    propto    local RTMB   1           0.025
+    propto    local RTMB   2           0.015
+    propto    local RTMB   3           0.026
+
+high-dimensional propto block (n=20)
+ structure       backend run elapsed_seconds
+    propto installed TMB   1           0.012
+    propto installed TMB   2           0.011
+    propto installed TMB   3           0.011
+    propto    local RTMB   1           0.025
+    propto    local RTMB   2           0.025
+    propto    local RTMB   3           0.025
+
+low-dimensional equalto block (n=5)
+ structure       backend run elapsed_seconds
+   equalto installed TMB   1           0.015
+   equalto installed TMB   2           0.014
+   equalto installed TMB   3           0.014
+   equalto    local RTMB   1           0.017
+   equalto    local RTMB   2           0.017
+   equalto    local RTMB   3           0.017
+
+high-dimensional equalto block (n=20)
+ structure       backend run elapsed_seconds
+   equalto installed TMB   1           0.012
+   equalto installed TMB   2           0.012
+   equalto installed TMB   3           0.011
+   equalto    local RTMB   1           0.026
+   equalto    local RTMB   2           0.025
+   equalto    local RTMB   3           0.024
+
+
+
+
+
+
+
+## Results After using RTMB::unstructured()
+
+low-dimensional us block (n=5)
+ structure       backend run elapsed_seconds
+        us installed TMB   1           0.088
+        us installed TMB   2           0.089
+        us installed TMB   3           0.086
+        us    local RTMB   1           0.320
+        us    local RTMB   2           0.076
+        us    local RTMB   3           0.081
+
+high-dimensional us block (n=20)
+ structure       backend run elapsed_seconds
+        us installed TMB   1           0.715
+        us installed TMB   2           0.686
+        us installed TMB   3           0.689
+        us    local RTMB   1           0.738
+        us    local RTMB   2           0.745
+        us    local RTMB   3           0.810
+
+low-dimensional propto block (n=5)
+ structure       backend run elapsed_seconds
+    propto installed TMB   1           0.011
+    propto installed TMB   2           0.010
+    propto installed TMB   3           0.011
+    propto    local RTMB   1           0.023
+    propto    local RTMB   2           0.012
+    propto    local RTMB   3           0.012
+
+high-dimensional propto block (n=20)
+ structure       backend run elapsed_seconds
+    propto installed TMB   1           0.012
+    propto installed TMB   2           0.012
+    propto installed TMB   3           0.011
+    propto    local RTMB   1           0.014
+    propto    local RTMB   2           0.014
+    propto    local RTMB   3           0.014
+
+low-dimensional equalto block (n=5)
+ structure       backend run elapsed_seconds
+   equalto installed TMB   1           0.015
+   equalto installed TMB   2           0.014
+   equalto installed TMB   3           0.014
+   equalto    local RTMB   1           0.016
+   equalto    local RTMB   2           0.016
+   equalto    local RTMB   3           0.016
+
+high-dimensional equalto block (n=20)
+ structure       backend run elapsed_seconds
+   equalto installed TMB   1           0.012
+   equalto installed TMB   2           0.012
+   equalto installed TMB   3           0.012
+   equalto    local RTMB   1           0.014
+   equalto    local RTMB   2           0.014
+   equalto    local RTMB   3           0.013

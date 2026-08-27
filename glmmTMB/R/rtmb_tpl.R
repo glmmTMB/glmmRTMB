@@ -1540,8 +1540,6 @@ allterms_nll <- function(u, theta, terms) {
 ## whereas matrix lower-triangle assignment in R fills it column-wise
 ## leading to a different theta ordering for dim >= 4
 tmb_unstructured_corr <- function(n, theta) {
-  "[<-" <- RTMB::ADoverload("[<-")
-
   expected <- n * (n - 1L) / 2L
   if (length(theta) != expected) {
     stop(
@@ -1550,25 +1548,14 @@ tmb_unstructured_corr <- function(n, theta) {
     )
   }
 
-  L <- diag(n)
-  k <- 1L
-  for (i in seq_len(n)) {
-    for (j in seq_len(n)) {
-      if (i > j) {
-        L[i, j] <- theta[k]
-        k <- k + 1L
-      }
-    }
-  }
-
-  llt <- L %*% t(L)
-  corr <- llt
-  for (i in seq_len(n)) {
-    for (j in seq_len(n)) {
-      corr[i, j] <- llt[i, j] / sqrt(llt[i, i] * llt[j, j])
-    }
-  }
-  corr
+  lower_idx <- which(lower.tri(diag(n)), arr.ind = TRUE)
+  rowwise_idx <- lower_idx[order(lower_idx[, 1L], lower_idx[, 2L]),
+                           , drop = FALSE]
+  tmb_to_rtmb_order <- match(
+    paste(lower_idx[, 1L], lower_idx[, 2L]),
+    paste(rowwise_idx[, 1L], rowwise_idx[, 2L])
+  )
+  RTMB::unstructured(n)$corr(theta[tmb_to_rtmb_order])
 }
 
 ## Simulation factor for density::UNSTRUCTURED_CORR_t, used in
