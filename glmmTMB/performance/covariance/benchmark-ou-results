@@ -37,5 +37,23 @@ high-dimensional OU block
     local RTMB   1           1.652
     local RTMB   2           1.684
     local RTMB   3           1.705
-3
 
+## Results (after following c++ state=space formulation for the ou covariance structure)
+
+low-dimensional OU block (n=100)
+       backend run elapsed_seconds
+ installed TMB   1           0.019
+ installed TMB   2           0.020
+ installed TMB   3           0.019
+    local RTMB   1           0.155
+    local RTMB   2           0.029
+    local RTMB   3           0.028
+
+high-dimensional OU block (n=300)
+       backend run elapsed_seconds
+ installed TMB   1           0.030
+ installed TMB   2           0.032
+ installed TMB   3           0.031
+    local RTMB   1           0.069
+    local RTMB   2           0.068
+    local RTMB   3           0.070

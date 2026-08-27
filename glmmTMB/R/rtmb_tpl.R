@@ -1839,9 +1839,12 @@ termwise_nll <- function(U, theta, term) {
         )
       }
       decay <- exp(corr_par[1L])
-      time_dist <- abs(outer(times, times, "-"))
-      corr <- exp(-decay * time_dist)
-      corr
+      if (term$fullCor == 0) {
+        matrix(numeric(0), 0, 0)
+      } else {
+        time_dist <- abs(outer(times, times, "-"))
+        exp(-decay * time_dist)
+      }
     },
 
     ## Exponential spatial covariance; glmmTMB.cpp:653-700
@@ -1972,6 +1975,46 @@ termwise_nll <- function(U, theta, term) {
 
     for (k in seq_len(reps)) {
       nll <- nll - RTMB::dautoreg(U[, k], phi = phi, log = TRUE, scale = sd)
+    }
+  } else if (density_structure == "ou") {
+    ## Match the state-space OU likelihood used by glmmTMB.cpp:603-608.
+    ## This avoids dense dmvnorm() evaluation and preserves the Markov
+    ## structure implied by adjacent time differences.
+    nll <- 0
+    time_diff <- diff(times)
+    rho <- exp(-decay * time_diff)
+    innovation_sd <- sd[1L] * sqrt(1 - rho * rho)
+
+    if (simulation) {
+      for (k in seq_len(reps)) {
+        U_sim <- numeric(n)
+        U_sim[1L] <- stats::rnorm(1L, mean = 0, sd = sd[1L])
+        if (n > 1L) {
+          for (j in 2:n) {
+            U_sim[j] <- stats::rnorm(
+              1L,
+              mean = rho[j - 1L] * U_sim[j - 1L],
+              sd = innovation_sd[j - 1L]
+            )
+          }
+        }
+        U_column <- U[, k]
+        U_column[] <- U_sim
+      }
+    } else {
+      for (k in seq_len(reps)) {
+        if (n > 1L) {
+          for (j in 2:n) {
+            nll <- nll - RTMB::dnorm(
+              U[j, k],
+              rho[j - 1L] * U[j - 1L, k],
+              innovation_sd[j - 1L],
+              log = TRUE
+            )
+          }
+        }
+        nll <- nll - RTMB::dnorm(U[1L, k], 0, sd[1L], log = TRUE)
+      }
     }
   } else {
     ## Keep scale dimensions identical to t(U). A bare vector is ambiguous to
