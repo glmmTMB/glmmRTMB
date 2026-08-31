@@ -43,8 +43,7 @@ installed_tmb_times <- function(n, seed) {
 if (!requireNamespace("pkgload", quietly = TRUE)) {
   stop("Install the 'pkgload' package before running this benchmark.")
 }
-pkg_dir <- if (file.exists("DESCRIPTION")) "." else "glmmTMB"
-pkgload::load_all(pkg_dir, quiet = TRUE)
+pkgload::load_all("glmmTMB", quiet = TRUE)
 old_use_rtmb <- glmmTMB::useRTMB()
 on.exit(glmmTMB::useRTMB(old_use_rtmb), add = TRUE)
 
