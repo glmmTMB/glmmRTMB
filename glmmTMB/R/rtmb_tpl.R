@@ -1821,12 +1821,7 @@ termwise_nll <- function(U, theta, term) {
     ## Homogeneous AR(1) covariance; glmmTMB.cpp:507-590
     ar1 = {
       phi <- corr_par[1L] / sqrt(1 + corr_par[1L]^2)
-      if (term$fullCor == 0) {
-        matrix(numeric(0), 0, 0)
-      } else {
-        lag <- abs(row(diag(n)) - col(diag(n)))
-        phi^lag
-      }
+      matrix(numeric(0), 0, 0)
     },
 
     ## OU covariance; glmmTMB.cpp:593-650
@@ -1971,10 +1966,63 @@ termwise_nll <- function(U, theta, term) {
       nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
     }
   } else if (density_structure == "ar1") {
+    ## Match the state-space AR1 likelihood used by glmmTMB.cpp:522-554.
+    ## This avoids building a dense covariance matrix and avoids routing the
+    ## homogeneous AR1 case through RTMB::dautoreg()'s vector-scale wrapper.
     nll <- 0
+    innovation_sd <- sqrt(1 - phi * phi)
 
     for (k in seq_len(reps)) {
-      nll <- nll - RTMB::dautoreg(U[, k], phi = phi, log = TRUE, scale = sd)
+      if (simulation) {
+        U_sim <- numeric(n)
+        if (name == "hetar1") {
+          U_sim[1L] <- sd[1L] * stats::rnorm(1L)
+          if (n > 1L) {
+            for (j in 2:n) {
+              U_sim[j] <- sd[j] * stats::rnorm(
+                1L,
+                mean = phi * U_sim[j - 1L] / sd[j - 1L],
+                sd = innovation_sd
+              )
+            }
+          }
+        } else {
+          U_sim[1L] <- stats::rnorm(1L, mean = 0, sd = sd[1L])
+          if (n > 1L) {
+            for (j in 2:n) {
+              U_sim[j] <- stats::rnorm(
+                1L,
+                mean = phi * U_sim[j - 1L],
+                sd = sd[1L] * innovation_sd
+              )
+            }
+          }
+        }
+        U_column <- U[, k]
+        U_column[] <- U_sim
+      }
+    }
+    if (!simulation && name == "hetar1") {
+      nll <- -sum(RTMB::dnorm(U[1L, ] / sd[1L], 0, 1, log = TRUE)) +
+        reps * logsd[1L]
+      if (n > 1L) {
+        nll <- nll - sum(RTMB::dnorm(
+          U[-1L, , drop = FALSE] / sd[-1L],
+          phi * U[-n, , drop = FALSE] / sd[-n],
+          innovation_sd,
+          log = TRUE
+        )) + reps * sum(logsd[-1L])
+      }
+    } else if (!simulation) {
+      nll <- -sum(RTMB::dnorm(U[1L, ], 0, sd[1L], log = TRUE))
+      if (n > 1L) {
+        nll <- nll - sum(RTMB::dnorm(
+          U[-1L, , drop = FALSE],
+          phi * U[-n, , drop = FALSE],
+          sd[1L] * innovation_sd,
+          log = TRUE
+        ))
+      }
     }
   } else if (density_structure == "ou") {
     ## Match the state-space OU likelihood used by glmmTMB.cpp:603-608.
@@ -2028,7 +2076,7 @@ termwise_nll <- function(U, theta, term) {
 
   ## Match C++ full-correlation reporting; equalto always reports its matrix.
   report_corr <- C
-  if (name %in% c("ar1", "hetar1") && term$fullCor == 0) {
+  if (name %in% c("ar1", "hetar1")) {
     report_corr <- matrix(phi, 1L, 1L)
   }
   if (name == "ou" && term$fullCor == 0) {
