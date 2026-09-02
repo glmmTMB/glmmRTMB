@@ -2,10 +2,35 @@
 ## This follows the exp benchmark and times the full glmmTMB() call for
 ## gau(pos + 0 | group) using installed TMB, local TMB, and local RTMB.
 
+## Pin BLAS/OpenMP threading to 1 so that parallel workers (spawned below via
+## parallel::mclapply, and the installed-TMB Rscript subprocesses they call)
+## don't each try to claim every core, which oversubscribes the machine.
+Sys.setenv(OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1",
+           MKL_NUM_THREADS = "1")
+
 reps <- as.integer(Sys.getenv("RTMB_BENCHMARK_TIMES", "3"))
 high_n <- as.integer(Sys.getenv("GAU_BENCHMARK_HIGH_N", "300"))
 if (is.na(reps) || reps < 1L) stop("RTMB_BENCHMARK_TIMES must be positive.")
 if (is.na(high_n) || high_n < 2L) stop("GAU_BENCHMARK_HIGH_N must be at least 2.")
+
+## Run the independent installed-TMB Rscript launches in parallel, using up
+## to half of the available cores.
+n_cores <- max(1L, round(parallel::detectCores() / 2))
+run_parallel <- function(X, FUN) {
+  if (.Platform$OS.type == "windows" || n_cores <= 1L) {
+    return(lapply(X, FUN))
+  }
+  result <- parallel::mclapply(X, FUN, mc.cores = min(length(X), n_cores))
+  failed <- vapply(result, function(x) inherits(x, "try-error"), logical(1L))
+  if (any(failed)) {
+    messages <- vapply(result[failed], function(x) {
+      cond <- attr(x, "condition")
+      if (is.null(cond)) as.character(x) else conditionMessage(cond)
+    }, character(1L))
+    stop("Parallel benchmark run failed: ", paste(messages, collapse = " | "))
+  }
+  result
+}
 
 installed_tmb_times <- function(n, seed) {
   code <- sprintf(paste(
@@ -63,8 +88,7 @@ make_data <- function(n, seed) {
   d
 }
 
-benchmark_case <- function(d, label, seed) {
-  installed <- installed_tmb_times(nrow(d), seed)
+benchmark_case <- function(d, label, seed, installed) {
   fit_tmb <- function() {
     glmmTMB::useRTMB(FALSE); stopifnot(!glmmTMB::useRTMB())
     glmmTMB(z ~ 1 + gau(pos + 0 | group), data = d)
@@ -95,6 +119,25 @@ benchmark_case <- function(d, label, seed) {
 
 low <- make_data(100L, 1L)
 high <- make_data(high_n, 2L)
-results <- rbind(benchmark_case(low, "low-dimensional volcano example", 1L),
-                 benchmark_case(high, "high-dimensional spatial block", 2L))
+
+cases <- list(
+  list(d = low, label = "low-dimensional volcano example", seed = 1L),
+  list(d = high, label = "high-dimensional spatial block", seed = 2L)
+)
+
+installed_all <- run_parallel(cases, function(case) {
+  installed_tmb_times(nrow(case$d), case$seed)
+})
+
+results <- do.call(rbind, Map(
+  function(case, installed) {
+    benchmark_case(case$d, case$label, case$seed, installed)
+  },
+  cases, installed_all
+))
+
 print(results, row.names = FALSE)
+
+results_file <- "performance/covariance/benchmark-gau-results.rds"
+saveRDS(results, results_file)
+cat("\nSaved results table to ", results_file, "\n", sep = "")

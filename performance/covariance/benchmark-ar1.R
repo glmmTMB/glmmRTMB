@@ -3,6 +3,12 @@
 ## ar1(row + 0 | Subject). It compares installed-package TMB from a clean
 ## Rscript process against local-source RTMB after pkgload::load_all().
 
+## Pin BLAS/OpenMP threading to 1 so that parallel workers (spawned below via
+## parallel::mclapply, and the installed-TMB Rscript subprocesses they call)
+## don't each try to claim every core, which oversubscribes the machine.
+Sys.setenv(OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1",
+           MKL_NUM_THREADS = "1")
+
 reps <- as.integer(Sys.getenv("RTMB_BENCHMARK_TIMES", "3"))
 low_n <- as.integer(Sys.getenv("AR1_BENCHMARK_LOW_N", "10"))
 high_n <- as.integer(Sys.getenv("AR1_BENCHMARK_HIGH_N", "180"))
@@ -14,6 +20,25 @@ if (is.na(low_n) || low_n < 2L) {
 }
 if (is.na(high_n) || high_n < 2L) {
   stop("AR1_BENCHMARK_HIGH_N must be at least 2.")
+}
+
+## Run the independent installed-TMB Rscript launches in parallel, using up
+## to half of the available cores.
+n_cores <- max(1L, round(parallel::detectCores() / 2))
+run_parallel <- function(X, FUN) {
+  if (.Platform$OS.type == "windows" || n_cores <= 1L) {
+    return(lapply(X, FUN))
+  }
+  result <- parallel::mclapply(X, FUN, mc.cores = min(length(X), n_cores))
+  failed <- vapply(result, function(x) inherits(x, "try-error"), logical(1L))
+  if (any(failed)) {
+    messages <- vapply(result[failed], function(x) {
+      cond <- attr(x, "condition")
+      if (is.null(cond)) as.character(x) else conditionMessage(cond)
+    }, character(1L))
+    stop("Parallel benchmark run failed: ", paste(messages, collapse = " | "))
+  }
+  result
 }
 
 installed_tmb_times <- function(n, seed) {
@@ -84,9 +109,7 @@ make_ar1_data <- function(n, seed) {
   )
 }
 
-benchmark_case <- function(d, label) {
-  installed_tmb <- installed_tmb_times(nrow(d), attr(d, "seed"))
-
+benchmark_case <- function(d, label, installed_tmb) {
   fit_rtmb <- function() {
     glmmTMB::useRTMB(TRUE)
     stopifnot(identical(glmmTMB::useRTMB(), TRUE))
@@ -130,9 +153,24 @@ attr(low_rank_data, "seed") <- 1L
 high_rank_data <- make_ar1_data(high_n, seed = 2L)
 attr(high_rank_data, "seed") <- 2L
 
-results <- rbind(
-  benchmark_case(low_rank_data, "low-dimensional AR1 block"),
-  benchmark_case(high_rank_data, "high-dimensional AR1 block")
+cases <- list(
+  list(d = low_rank_data, label = "low-dimensional AR1 block"),
+  list(d = high_rank_data, label = "high-dimensional AR1 block")
 )
 
+installed_all <- run_parallel(cases, function(case) {
+  installed_tmb_times(nrow(case$d), attr(case$d, "seed"))
+})
+
+results <- do.call(rbind, Map(
+  function(case, installed_tmb) {
+    benchmark_case(case$d, case$label, installed_tmb)
+  },
+  cases, installed_all
+))
+
 print(results, row.names = FALSE)
+
+results_file <- "performance/covariance/benchmark-ar1-results.rds"
+saveRDS(results, results_file)
+cat("\nSaved results table to ", results_file, "\n", sep = "")
