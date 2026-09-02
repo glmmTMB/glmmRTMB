@@ -18,6 +18,13 @@
 ##   RTMB_GRID_RATIO_MIN_TMB=0.05
 ##   RTMB_GRID_PROGRESS_EVERY=10
 
+## Pin BLAS/OpenMP threading to 1 so that the parallel TMB/RTMB backend
+## subprocesses spawned below (via parallel::mclapply) don't each try to
+## claim every core, which oversubscribes the machine. This also applies to
+## the child processes themselves, since they inherit this environment.
+Sys.setenv(OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1",
+           MKL_NUM_THREADS = "1")
+
 if (!requireNamespace("pkgload", quietly = TRUE)) {
   stop("Install the 'pkgload' package before running this benchmark.")
 }
@@ -96,6 +103,25 @@ if (is.na(ratio_min_tmb) || ratio_min_tmb < 0) {
 }
 if (is.na(progress_every) || progress_every < 0L) {
   stop("RTMB_GRID_PROGRESS_EVERY must be a non-negative integer.")
+}
+
+## Run the independent per-backend Rscript launches in parallel, using up to
+## half of the available cores.
+n_cores <- max(1L, round(parallel::detectCores() / 2))
+run_parallel <- function(X, FUN) {
+  if (.Platform$OS.type == "windows" || n_cores <= 1L) {
+    return(lapply(X, FUN))
+  }
+  result <- parallel::mclapply(X, FUN, mc.cores = min(length(X), n_cores))
+  failed <- vapply(result, function(x) inherits(x, "try-error"), logical(1L))
+  if (any(failed)) {
+    messages <- vapply(result[failed], function(x) {
+      cond <- attr(x, "condition")
+      if (is.null(cond)) as.character(x) else conditionMessage(cond)
+    }, character(1L))
+    stop("Parallel benchmark run failed: ", paste(messages, collapse = " | "))
+  }
+  result
 }
 
 family_spec <- function(family_name) {
@@ -565,8 +591,10 @@ run_parent <- function() {
   rtmb_file <- tempfile(fileext = ".rds")
   on.exit(unlink(c(tmb_file, rtmb_file)), add = TRUE)
 
-  for (backend in c("TMB", "RTMB")) {
-    output <- if (backend == "TMB") tmb_file else rtmb_file
+  backend_output <- list(TMB = tmb_file, RTMB = rtmb_file)
+
+  run_backend_child <- function(backend) {
+    output <- backend_output[[backend]]
     cat("Timing ", backend, " grid...\n", sep = "")
     status <- system2(
       "Rscript",
@@ -586,13 +614,22 @@ run_parent <- function() {
     if (!identical(status, 0L)) {
       stop(backend, " benchmark failed with exit status ", status)
     }
+    invisible(NULL)
   }
+
+  run_parallel(c("TMB", "RTMB"), run_backend_child)
 
   tmb <- readRDS(tmb_file)
   rtmb <- readRDS(rtmb_file)
   raw <- rbind(tmb, rtmb)
   comparison <- compare_backends(tmb, rtmb)
   print_results(comparison, raw)
+
+  results_file <- file.path(repo_root, "performance", "covariance",
+                            "benchmark-grid-results.rds")
+  saveRDS(list(comparison = comparison, raw = raw), results_file)
+  cat("\nSaved results table to ", results_file, "\n", sep = "")
+
   invisible(comparison)
 }
 

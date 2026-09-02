@@ -5,6 +5,12 @@
 ## These structures scale quadratically in the block dimension, so the default
 ## high dimension is intentionally much smaller than the AR(1)/spatial examples.
 
+## Pin BLAS/OpenMP threading to 1 so that parallel workers (spawned below via
+## parallel::mclapply, and the installed-TMB Rscript subprocesses they call)
+## don't each try to claim every core, which oversubscribes the machine.
+Sys.setenv(OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1",
+           MKL_NUM_THREADS = "1")
+
 reps <- as.integer(Sys.getenv("RTMB_BENCHMARK_TIMES", "3"))
 low_n <- as.integer(Sys.getenv("UNSTRUCT_BENCHMARK_LOW_N", "5"))
 high_n <- as.integer(Sys.getenv("UNSTRUCT_BENCHMARK_HIGH_N", "20"))
@@ -16,6 +22,25 @@ if (is.na(low_n) || low_n < 2L) {
 }
 if (is.na(high_n) || high_n < 2L) {
   stop("UNSTRUCT_BENCHMARK_HIGH_N must be at least 2.")
+}
+
+## Run the independent installed-TMB Rscript launches in parallel, using up
+## to half of the available cores.
+n_cores <- max(1L, round(parallel::detectCores() / 2))
+run_parallel <- function(X, FUN) {
+  if (.Platform$OS.type == "windows" || n_cores <= 1L) {
+    return(lapply(X, FUN))
+  }
+  result <- parallel::mclapply(X, FUN, mc.cores = min(length(X), n_cores))
+  failed <- vapply(result, function(x) inherits(x, "try-error"), logical(1L))
+  if (any(failed)) {
+    messages <- vapply(result[failed], function(x) {
+      cond <- attr(x, "condition")
+      if (is.null(cond)) as.character(x) else conditionMessage(cond)
+    }, character(1L))
+    stop("Parallel benchmark run failed: ", paste(messages, collapse = " | "))
+  }
+  result
 }
 
 make_unstructured_data <- function(n, seed) {
@@ -110,10 +135,9 @@ pkgload::load_all("glmmTMB", quiet = TRUE)
 old_use_rtmb <- glmmTMB::useRTMB()
 on.exit(glmmTMB::useRTMB(old_use_rtmb), add = TRUE)
 
-benchmark_case <- function(structure, n, seed, label) {
+benchmark_case <- function(structure, n, seed, label, installed_tmb) {
   d <- make_unstructured_data(n, seed)
   V <- make_covariance_matrix(n)
-  installed_tmb <- installed_tmb_times(structure, n, seed)
 
   fit_rtmb <- switch(
     structure,
@@ -167,20 +191,30 @@ benchmark_case <- function(structure, n, seed, label) {
 }
 
 structures <- c("us", "propto", "equalto")
-results <- do.call(
-  rbind,
-  lapply(structures, function(structure) {
-    rbind(
-      benchmark_case(
-        structure, low_n, seed = 1L,
-        label = paste("low-dimensional", structure, "block")
-      ),
-      benchmark_case(
-        structure, high_n, seed = 2L,
-        label = paste("high-dimensional", structure, "block")
-      )
-    )
-  })
-)
+
+cases <- do.call(c, lapply(structures, function(structure) {
+  list(
+    list(structure = structure, n = low_n, seed = 1L,
+         label = paste("low-dimensional", structure, "block")),
+    list(structure = structure, n = high_n, seed = 2L,
+         label = paste("high-dimensional", structure, "block"))
+  )
+}))
+
+installed_all <- run_parallel(cases, function(case) {
+  installed_tmb_times(case$structure, case$n, case$seed)
+})
+
+results <- do.call(rbind, Map(
+  function(case, installed_tmb) {
+    benchmark_case(case$structure, case$n, case$seed, case$label,
+                   installed_tmb)
+  },
+  cases, installed_all
+))
 
 print(results, row.names = FALSE)
+
+results_file <- "performance/covariance/benchmark-unstructured-results.rds"
+saveRDS(results, results_file)
+cat("\nSaved results table to ", results_file, "\n", sep = "")
