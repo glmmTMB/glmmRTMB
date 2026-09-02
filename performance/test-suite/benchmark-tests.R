@@ -7,6 +7,7 @@
 ##   RTMB_TEST_BENCHMARK_FILTER=rtmb-gaussian
 ##   RTMB_TEST_BENCHMARK_TOP=30
 ##   RTMB_TEST_BENCHMARK_RATIO_MIN_TMB=0.05
+##   RTMB_TEST_BENCHMARK_REPS=5
 
 if (!requireNamespace("pkgload", quietly = TRUE)) {
   stop("Install the 'pkgload' package before running this benchmark.")
@@ -39,12 +40,16 @@ filter <- Sys.getenv("RTMB_TEST_BENCHMARK_FILTER", "")
 top_n <- as.integer(Sys.getenv("RTMB_TEST_BENCHMARK_TOP", "30"))
 ratio_min_tmb <- as.numeric(Sys.getenv("RTMB_TEST_BENCHMARK_RATIO_MIN_TMB",
                                        "0.05"))
+reps <- as.integer(Sys.getenv("RTMB_TEST_BENCHMARK_REPS", "5"))
 
 if (is.na(top_n) || top_n < 1L) {
   stop("RTMB_TEST_BENCHMARK_TOP must be a positive integer.")
 }
 if (is.na(ratio_min_tmb) || ratio_min_tmb < 0) {
   stop("RTMB_TEST_BENCHMARK_RATIO_MIN_TMB must be non-negative.")
+}
+if (is.na(reps) || reps < 1L) {
+  stop("RTMB_TEST_BENCHMARK_REPS must be a positive integer.")
 }
 
 TimingReporter <- R6::R6Class(
@@ -144,21 +149,7 @@ run_backend <- function(backend) {
   on.exit(glmmTMB::useRTMB(old_use_rtmb), add = TRUE)
   glmmTMB::useRTMB(backend == "RTMB")
 
-  reporter <- TimingReporter$new()
-  testthat::test_dir(
-    test_dir,
-    filter = if (nzchar(filter)) filter else NULL,
-    reporter = reporter,
-    load_helpers = TRUE,
-    stop_on_failure = FALSE,
-    stop_on_warning = FALSE,
-    package = "glmmTMB",
-    load_package = "none"
-  )
-
-  out <- if (length(reporter$rows) > 0L) {
-    do.call(rbind, reporter$rows)
-  } else {
+  empty_rows <- function() {
     data.frame(
       test_index = integer(),
       file = character(),
@@ -173,7 +164,54 @@ run_backend <- function(backend) {
       stringsAsFactors = FALSE
     )
   }
+
+  ## Run the whole suite `reps` times and report the mean per-test elapsed
+  ## time, rather than a single (noisier) run.
+  rep_rows <- vector("list", reps)
+  for (r in seq_len(reps)) {
+    reporter <- TimingReporter$new()
+    testthat::test_dir(
+      test_dir,
+      filter = if (nzchar(filter)) filter else NULL,
+      reporter = reporter,
+      load_helpers = TRUE,
+      stop_on_failure = FALSE,
+      stop_on_warning = FALSE,
+      package = "glmmTMB",
+      load_package = "none"
+    )
+    out <- if (length(reporter$rows) > 0L) {
+      do.call(rbind, reporter$rows)
+    } else {
+      empty_rows()
+    }
+    out$rep <- r
+    rep_rows[[r]] <- out
+  }
+  raw <- do.call(rbind, rep_rows)
+
+  if (nrow(raw) == 0L) {
+    out <- empty_rows()
+  } else {
+    ## Mean elapsed time (and mean expectation/warning/skip counts, which
+    ## should be identical across reps for a deterministic test) plus the
+    ## max failure/error count (so a failure on any single rep still shows
+    ## up, rather than being averaged away).
+    mean_agg <- aggregate(
+      cbind(seconds, expectations, warnings, skips) ~
+        test_index + file + context + test,
+      data = raw, FUN = mean
+    )
+    max_agg <- aggregate(
+      cbind(failures, errors) ~ test_index + file + context + test,
+      data = raw, FUN = max
+    )
+    out <- merge(mean_agg, max_agg,
+                by = c("test_index", "file", "context", "test"))
+    out <- out[order(out$test_index), ]
+  }
   out$backend <- backend
+  out$reps <- reps
   out
 }
 
@@ -250,7 +288,7 @@ run_parent <- function() {
   on.exit(unlink(c(tmb_file, rtmb_file)), add = TRUE)
 
   for (backend in c("TMB", "RTMB")) {
-    cat("Timing ", backend, " tests", if (nzchar(filter)) {
+    cat("Timing ", backend, " tests (", reps, " reps)", if (nzchar(filter)) {
       paste0(" matching filter '", filter, "'")
     } else {
       ""
@@ -262,7 +300,8 @@ run_parent <- function() {
       env = c(
         paste0("RTMB_TEST_BENCHMARK_CHILD_BACKEND=", backend),
         paste0("RTMB_TEST_BENCHMARK_CHILD_OUTPUT=", output),
-        paste0("RTMB_TEST_BENCHMARK_FILTER=", filter)
+        paste0("RTMB_TEST_BENCHMARK_FILTER=", filter),
+        paste0("RTMB_TEST_BENCHMARK_REPS=", reps)
       ),
       stdout = FALSE,
       stderr = FALSE
@@ -281,12 +320,15 @@ run_parent <- function() {
   rtmb_total <- sum(rtmb$seconds)
   n_tests <- nrow(comparison)
 
-  cat("\nRTMB vs TMB test-suite timing\n")
+  cat("\nRTMB vs TMB test-suite timing (mean of ", reps, " reps per test)\n",
+      sep = "")
   cat("=============================\n")
   cat("Tests timed: ", n_tests, "\n", sep = "")
   cat("Filter: ", if (nzchar(filter)) filter else "<none>", "\n", sep = "")
-  cat("TMB total:  ", format_num(tmb_total), " sec\n", sep = "")
-  cat("RTMB total: ", format_num(rtmb_total), " sec\n", sep = "")
+  cat("TMB total (sum of per-test means):  ", format_num(tmb_total),
+      " sec\n", sep = "")
+  cat("RTMB total (sum of per-test means): ", format_num(rtmb_total),
+      " sec\n", sep = "")
   cat("Overall RTMB/TMB ratio: ", format_num(rtmb_total / tmb_total, 2L),
       "x\n", sep = "")
   cat("TMB failures/errors:  ",
