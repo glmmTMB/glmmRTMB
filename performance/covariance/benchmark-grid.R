@@ -28,6 +28,19 @@ Sys.setenv(OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1",
 if (!requireNamespace("pkgload", quietly = TRUE)) {
   stop("Install the 'pkgload' package before running this benchmark.")
 }
+if (!requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+  stop("Install the 'RhpcBLASctl' package before running this benchmark.")
+}
+
+## Sys.setenv(OPENBLAS_NUM_THREADS = ...) above only reaches this process's
+## own threading if set before OpenBLAS's thread pool is first created,
+## which for THIS process already happened at library-load time -- it does
+## still correctly propagate to freshly spawned child processes, though.
+## RhpcBLASctl calls the underlying C APIs directly and can resize the
+## thread pool at any point, so each process (parent and children) also
+## pins itself explicitly with it below.
+RhpcBLASctl::blas_set_num_threads(1)
+RhpcBLASctl::omp_set_num_threads(1)
 
 script_path <- local({
   file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
@@ -391,7 +404,15 @@ time_case <- function(case, backend) {
 }
 
 run_backend <- function(backend) {
-  pkgload::load_all(pkg_dir, quiet = TRUE)
+  ## pkgload::load_all() defaults to debug = TRUE, which appends "-O0" after
+  ## R's own "-O2" -- gcc/g++ take the last -O flag, so this silently builds
+  ## an unoptimized binary. debug = FALSE gives a build comparable to a
+  ## normal R CMD INSTALL (and to CRAN).
+  pkgload::load_all(pkg_dir, quiet = TRUE, debug = FALSE)
+  ## Re-pin after load_all(), in case compiling/loading the package reset
+  ## the thread pool.
+  RhpcBLASctl::blas_set_num_threads(1)
+  RhpcBLASctl::omp_set_num_threads(1)
   grid <- expand.grid(
     family = families,
     covstruct = covstructs,
@@ -586,6 +607,15 @@ run_parent <- function() {
   if (!file.exists(file.path(pkg_dir, "DESCRIPTION"))) {
     stop("Run this script from the repository root.")
   }
+
+  if (!requireNamespace("pkgload", quietly = TRUE)) {
+    stop("Install the 'pkgload' package before running this benchmark.")
+  }
+  ## Compile once, here in the parent, before the TMB and RTMB child
+  ## processes are launched in parallel below -- otherwise both children
+  ## could try to compile the same source concurrently and race.
+  cat("Compiling local source (debug = FALSE) before timing...\n")
+  pkgload::load_all(pkg_dir, quiet = TRUE, debug = FALSE)
 
   tmb_file <- tempfile(fileext = ".rds")
   rtmb_file <- tempfile(fileext = ".rds")

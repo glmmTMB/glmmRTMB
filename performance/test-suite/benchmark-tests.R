@@ -17,6 +17,9 @@ if (!requireNamespace("testthat", quietly = TRUE)) {
 if (!requireNamespace("R6", quietly = TRUE)) {
   stop("Install the 'R6' package before running this benchmark.")
 }
+if (!requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+  stop("Install the 'RhpcBLASctl' package before running this benchmark.")
+}
 
 script_path <- local({
   file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
@@ -117,7 +120,25 @@ TimingReporter <- R6::R6Class(
 )
 
 run_backend <- function(backend) {
-  pkgload::load_all(pkg_dir, quiet = TRUE)
+  ## Pin BLAS/OpenMP threading to 1 for reproducible per-test timings.
+  ## RhpcBLASctl calls the underlying C APIs directly, unlike
+  ## Sys.setenv(OPENBLAS_NUM_THREADS = ...), which only takes effect if set
+  ## before OpenBLAS's thread pool is first created (i.e. too late here).
+  RhpcBLASctl::blas_set_num_threads(1)
+  RhpcBLASctl::omp_set_num_threads(1)
+
+  ## pkgload::load_all() defaults to debug = TRUE, which compiles with
+  ## "-UNDEBUG -Wall -pedantic -g -O0" appended after R's own "-O2" -- since
+  ## gcc/g++ take the last -O flag on the command line, this silently builds
+  ## an unoptimized binary and makes the TMB timings (and hence the
+  ## RTMB/TMB ratio) meaningless. debug = FALSE gives a build comparable to
+  ## a normal R CMD INSTALL (and to CRAN).
+  pkgload::load_all(pkg_dir, quiet = TRUE, debug = FALSE)
+
+  ## Re-pin after load_all(), in case compiling/loading the package reset
+  ## the thread pool.
+  RhpcBLASctl::blas_set_num_threads(1)
+  RhpcBLASctl::omp_set_num_threads(1)
 
   old_use_rtmb <- glmmTMB::useRTMB()
   on.exit(glmmTMB::useRTMB(old_use_rtmb), add = TRUE)
@@ -311,6 +332,10 @@ run_parent <- function() {
         extra_sec = 9L, ratio = 7L, status = 9L)
     )
   }
+
+  results_file <- "performance/test-suite/benchmark-tests-results.rds"
+  saveRDS(comparison, results_file)
+  cat("\nSaved results table to ", results_file, "\n", sep = "")
 
   invisible(comparison)
 }
