@@ -1,5 +1,9 @@
 cmb <- function(f, d) function(p) f(p, d)
 
+vec_rtmb <- function(z, x) {
+  rep(as.vector(z), length.out = length(x))
+}
+
 osa_keep <- function(x) {
   if (inherits(x, "osa")) {
     as.vector(x@keep[, 1L])
@@ -31,7 +35,7 @@ logit_inverse_linkfun_rtmb <- function(eta, link) {
         lambertW = exp(eta) * exp(exp(eta)),
         stop("link not yet implemented for binomial: ", names(link))
       )
-      log(mu) - log(1 - mu)
+      log(mu) - log1p(-mu)
     }
   )
 }
@@ -164,7 +168,10 @@ dZI <- function(density) {
     x <- osa_value(x)
     if (is.null(eta_zi)) {
       loglik <- density(x, ..., log = TRUE)
-      return(if (log) loglik else exp(loglik))
+      if (log) {
+        return(loglik)
+      }
+      return(exp(loglik))
     }
 
     if (is.null(is_zero)) {
@@ -214,9 +221,9 @@ logspace_gamma_rtmb <- RTMB::Vectorize(
 dbetabinom_robust_rtmb <- function(x, log_shape1, log_shape2, size,
                                    log = FALSE) {
   if (inherits(x, "simref")) {
-    log_shape1 <- rep(as.vector(log_shape1), length.out = length(x))
-    log_shape2 <- rep(as.vector(log_shape2), length.out = length(x))
-    size <- rep(as.vector(size), length.out = length(x))
+    log_shape1 <- vec_rtmb(log_shape1, x)
+    log_shape2 <- vec_rtmb(log_shape2, x)
+    size <- vec_rtmb(size, x)
     ans <- numeric(length(x))
     for (i in seq_along(ans)) {
       prob <- stats::rbeta(1L, exp(log_shape1[i]), exp(log_shape2[i]))
@@ -530,9 +537,9 @@ dskewnormal_rtmb <- function(x, mean, sd, alpha, log = FALSE) {
 
   if (inherits(x, "simref")) {
     n <- length(x)
-    xi <- rep(as.vector(xi), length.out = n)
-    omega <- rep(as.vector(omega), length.out = n)
-    delta <- rep(as.vector(delta), length.out = n)
+    xi <- vec_rtmb(xi, x)
+    omega <- vec_rtmb(omega, x)
+    delta <- vec_rtmb(delta, x)
     ans <- numeric(n)
     for (i in seq_len(n)) {
       chi <- abs(stats::rnorm(1L))
@@ -595,9 +602,10 @@ rtruncated_genpois_rtmb <- function(theta, lambda) {
     ans <- rgenpois_rtmb(theta, lambda)
     counter <- counter + 1L
   }
-  if (ans < 1) {
+  if (counter == nloop && ans < 1) {
     warning(
-      "Zeros in simulation of zero-truncated data. ",
+      "Simulation of zero-truncated data reached the maximum number of retries ",
+      "and still returned zeros. ",
       "Possibly due to low estimated mean.",
       call. = FALSE
     )
@@ -608,8 +616,8 @@ rtruncated_genpois_rtmb <- function(theta, lambda) {
 ## Translated from the genpois_family case in glmmTMB.cpp:1128-1133.
 dgenpois_rtmb <- function(x, theta, lambda, log = FALSE) {
   if (inherits(x, "simref")) {
-    theta <- rep(as.vector(theta), length.out = length(x))
-    lambda <- rep(as.vector(lambda), length.out = length(x))
+    theta <- vec_rtmb(theta, x)
+    lambda <- vec_rtmb(lambda, x)
     ans <- numeric(length(x))
     for (i in seq_along(ans)) {
       ans[i] <- rgenpois_rtmb(theta[i], lambda[i])
@@ -690,8 +698,8 @@ log_nzprob_truncated_genpois_rtmb <- RTMB::Vectorize(
 ## glmmTMB.cpp:1134-1139.
 dtruncated_genpois_rtmb <- function(x, theta, lambda, log = FALSE) {
   if (inherits(x, "simref")) {
-    theta <- rep(as.vector(theta), length.out = length(x))
-    lambda <- rep(as.vector(lambda), length.out = length(x))
+    theta <- vec_rtmb(theta, x)
+    lambda <- vec_rtmb(lambda, x)
     ans <- numeric(length(x))
     for (i in seq_along(ans)) {
       ans[i] <- rtruncated_genpois_rtmb(theta[i], lambda[i])
@@ -739,9 +747,10 @@ rtruncated_compois2_rtmb <- function(n, mean, nu) {
     ans[zero] <- rcompois2(sum(zero), mean = mean[zero], nu = nu[zero])
     counter <- counter + 1L
   }
-  if (any(ans < 1)) {
+  if (counter == nloop && any(ans < 1)) {
     warning(
-      "Zeros in simulation of zero-truncated data. ",
+      "Simulation of zero-truncated data reached the maximum number of retries ",
+      "and still returned zeros. ",
       "Possibly due to low estimated mean.",
       call. = FALSE
     )
@@ -755,17 +764,17 @@ rtruncated_nbinom_rtmb <- function(n, size, k = 0L, mu) {
   size <- rep(size, length.out = n)
   mu <- rep(mu, length.out = n)
 
-  for (i in seq_len(n)) {
-    if (size[i] <= 0) {
-      stop("non-positive size in k-truncated-neg-bin simulator")
-    }
-    if (mu[i] <= 0) {
-      stop("non-positive mu in k-truncated-neg-bin simulator")
-    }
-    if (k < 0) {
-      stop("negative k in k-truncated-neg-bin simulator")
-    }
+  if (any(size <= 0)) {
+    stop("non-positive size in k-truncated-neg-bin simulator")
+  }
+  if (any(mu <= 0)) {
+    stop("non-positive mu in k-truncated-neg-bin simulator")
+  }
+  if (k < 0) {
+    stop("negative k in k-truncated-neg-bin simulator")
+  }
 
+  for (i in seq_len(n)) {
     p <- size[i] / (mu[i] + size[i])
     q <- mu[i] / (mu[i] + size[i])
     m <- ceiling(max((k + 1) * p - size[i] * q, 0))
@@ -932,7 +941,7 @@ dtruncated_nbinom2_rtmb <- function(x, log_mu, log_var_minus_mu, log_size,
 ## zero-truncated poisson density
 dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
   if (inherits(x, "simref")) {
-    lambda <- rep(as.vector(lambda), length.out = length(x))
+    lambda <- vec_rtmb(lambda, x)
     ans <- numeric(length(x))
     for (i in seq_along(ans)) {
       ans[i] <- rtruncated_poisson_rtmb(lambda[i], k = 0L)
@@ -977,9 +986,9 @@ linkfun_rtmb <- function(mu, link) {
     log = log(mu),
     identity = mu,
     sqrt = sqrt(mu),
-    logit = log(mu / (1 - mu)),
+    logit = log(mu) - log1p(-mu),
     probit = stats::qnorm(mu),
-    cloglog = log(-log(1 - mu)),
+    cloglog = log(-log1p(-mu)),
     inverse = 1 / mu,
     lambertW = stop("linkfun for lambertW not yet implemented"),
     stop("link not yet implemented for prediction aggregation: ", names(link))
@@ -1168,11 +1177,7 @@ rtmb_tpl <- function(parameters, data) {
     cloglog = 1 - exp(-exp(eta)),
     inverse = 1 / eta,
     lambertW = exp(eta) * exp(exp(eta)),
-    stop(
-      "link not yet implemented: ", names(link),
-      "; implemented links are: log, identity, sqrt, logit, probit, ",
-      "cloglog, inverse, lambertW"
-    )
+    stop("link not yet implemented: ", names(link))
   )
 
   ## Zero-inflation linear predictor; adapted from
@@ -1791,6 +1796,8 @@ termwise_nll <- function(U, theta, term) {
 
     ## Diagonal covariance; glmmTMB.cpp:358-405
     diag = {
+      ## Empty matrix means the diagonal structure has no correlation matrix;
+      ## downstream code expects a matrix-valued placeholder rather than NULL.
       matrix(numeric(0), 0, 0)
     },
 
@@ -1923,6 +1930,9 @@ termwise_nll <- function(U, theta, term) {
       )
     }
 
+    ## Only the first group currently has explicit RTMB implementations for all
+    ## C++ simulation modes.  The second group can simulate new random effects,
+    ## but fixed/zero simulation would need separate structure-specific code.
     flexible_simulation <- c("diag", "us", "ar1", "hetar1", "ou")
     random_only_simulation <- c(
       "homdiag", "cs", "homcs", "toep", "homtoep",
