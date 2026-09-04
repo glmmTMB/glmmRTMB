@@ -1968,11 +1968,7 @@ termwise_nll <- function(U, theta, term) {
   if (!simulate_density) {
     nll <- 0
   } else if (density_structure == "diag") {
-    nll <- 0
-
-    for (k in seq_len(n)) {
-      nll <- nll - sum(RTMB::dnorm(U[k, ], 0, sd[k], log = TRUE))
-    }
+    nll <- -sum(RTMB::dnorm(U, 0, sd, log = TRUE))
   } else if (density_structure == "ar1") {
     ## Match the state-space AR1 likelihood used by glmmTMB.cpp:522-554.
     ## This avoids building a dense covariance matrix and avoids routing the
@@ -2058,18 +2054,14 @@ termwise_nll <- function(U, theta, term) {
         U_column[] <- U_sim
       }
     } else {
-      for (k in seq_len(reps)) {
-        if (n > 1L) {
-          for (j in 2:n) {
-            nll <- nll - RTMB::dnorm(
-              U[j, k],
-              rho[j - 1L] * U[j - 1L, k],
-              innovation_sd[j - 1L],
-              log = TRUE
-            )
-          }
-        }
-        nll <- nll - RTMB::dnorm(U[1L, k], 0, sd[1L], log = TRUE)
+      nll <- -sum(RTMB::dnorm(U[1L, ], 0, sd[1L], log = TRUE))
+      if (n > 1L) {
+        nll <- nll - sum(RTMB::dnorm(
+          U[-1L, , drop = FALSE],
+          rho * U[-n, , drop = FALSE],
+          innovation_sd,
+          log = TRUE
+        ))
       }
     }
   } else {
