@@ -1577,16 +1577,12 @@ tmb_unstructured_sim_factor <- function(n, theta) {
     )
   }
 
+  ## TMB fills the lower triangle row-wise.  Assigning theta to the upper
+  ## triangle column-wise and transposing gives the same ordering, while direct
+  ## lower.tri() assignment would use R's column-wise lower-triangle order.
   L <- diag(n)
-  k <- 1L
-  for (i in seq_len(n)) {
-    for (j in seq_len(n)) {
-      if (i > j) {
-        L[i, j] <- theta[k]
-        k <- k + 1L
-      }
-    }
-  }
+  L[upper.tri(L)] <- theta
+  L <- t(L)
 
   L / sqrt(rowSums(L * L))
 }
