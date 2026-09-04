@@ -634,9 +634,11 @@ dgenpois_rtmb <- function(x, theta, lambda, log = FALSE) {
 ## from glmmtmb::LambertW(), distrib.h:486-521.
 lambertW_rtmb <- RTMB::Vectorize(
   function(x) {
-    y <- log1p(x)
-    for (i in seq_len(12L)) {
-      y <- y - (y - x * exp(-y)) / (1 + y)
+    "if" <- RTMB::ADoverload("if")
+    logx <- log(x)
+    y <- if (logx > 0) logx else x * 0
+    for (i in seq_len(100L)) {
+      y <- y - (y - exp(logx - y)) / (1 + y)
     }
     y
   },
