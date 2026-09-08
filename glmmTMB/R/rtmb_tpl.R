@@ -51,7 +51,7 @@ log_inverse_linkfun_rtmb <- function(eta, link) {
       mu <- switch(
         link_name,
         probit = RTMB::pnorm(eta),
-        cloglog = 1 - exp(-exp(eta)),
+        cloglog = -expm1(-exp(eta)),
         identity = eta,
         sqrt = eta * eta,
         inverse = 1 / eta,
@@ -292,7 +292,7 @@ rtmb_tpl <- function(parameters, data) {
     sqrt = eta * eta,
     logit = 1 / (1 + exp(-eta)),
     probit = RTMB::pnorm(eta),
-    cloglog = 1 - exp(-exp(eta)),
+    cloglog = -expm1(-exp(eta)),
     inverse = 1 / eta,
     lambertW = exp(eta) * exp(exp(eta)),
     stop("link not yet implemented: ", link_name)

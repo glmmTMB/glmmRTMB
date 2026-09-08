@@ -846,6 +846,30 @@ test_that("gaussian (Salamanders): simulate() works under RTMB backend", {
   expect_true(all(is.finite(sim$yobs)))
 })
 
+test_that("gaussian: cloglog preserves small probabilities and derivatives", {
+  local_useRTMB(TRUE)
+  eta <- c(-60, -40, -20, 0, 2)
+  mu <- -expm1(-exp(eta))
+  dat <- data.frame(y = mu + c(0.1, -0.1, 0.1, -0.1, 0.1), eta = eta)
+  fit <- glmmTMB(
+    y ~ 1 + offset(eta), data = dat, family = gaussian(link = "cloglog"),
+    start = list(beta = 0), map = list(beta = factor(NA)), se = FALSE
+  )
+
+  ## Compare relative errors so rounding a tiny probability to zero fails.
+  expect_equal(as.numeric(predict(fit, type = "response")) / mu,
+               rep(1, length(mu)), tolerance = 1e-12)
+
+  obj <- RTMB::MakeADFun(
+    function(p) sum(log_inverse_linkfun_rtmb(p$eta, "cloglog")),
+    list(eta = eta), silent = TRUE
+  )
+  expect_equal(obj$fn(), sum(log(mu)), tolerance = 1e-12)
+  expected_gradient <- exp(eta - exp(eta)) / mu
+  expect_equal(as.vector(obj$gr()) / expected_gradient,
+               rep(1, length(eta)), tolerance = 1e-12)
+})
+
 test_that("gaussian: supported inverse links match TMB and manual likelihood", {
   link_parameters <- list(
     identity = c(0.3, 0.4),
