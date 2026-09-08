@@ -476,6 +476,10 @@ up2date <- function(oldfit, update_gauss_disp = FALSE) {
       ## these are DATA_IVECTOR but apparently after processing
       ##  TMB turns these into numeric ... ??
       for (v in prior_ivars) ee$data[[v]] <- numeric(0)
+      ee$data$rtmb_prior_distrib_name <- factor(character(0),
+                                                levels = names(.valid_prior))
+      ee$data$rtmb_prior_whichpar_name <- factor(character(0),
+                                                 levels = names(.valid_vprior))
       for (v in prior_fvars) ee$data[[v]] <- numeric(0)
       
     }

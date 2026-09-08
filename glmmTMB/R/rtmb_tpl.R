@@ -19,21 +19,22 @@ osa_value <- function(x) {
 ## Translated from logit_inverse_linkfun(), glmmTMB.cpp:213-232.
 ## The binomial likelihood uses logit(probability), not necessarily eta.
 logit_inverse_linkfun_rtmb <- function(eta, link) {
+  link_name <- link_name_rtmb(link)
   switch(
-    names(link),
+    link_name,
     logit = eta,
     probit = RTMB::pnorm(eta, log.p = TRUE) -
       RTMB::pnorm(eta, lower.tail = FALSE, log.p = TRUE),
     cloglog = RTMB::logspace_sub(exp(eta), 0),
     {
       mu <- switch(
-        names(link),
+        link_name,
         log = exp(eta),
         identity = eta,
         sqrt = eta * eta,
         inverse = 1 / eta,
         lambertW = exp(eta) * exp(exp(eta)),
-        stop("link not yet implemented for binomial: ", names(link))
+        stop("link not yet implemented for binomial: ", link_name)
       )
       log(mu) - log1p(-mu)
     }
@@ -43,20 +44,21 @@ logit_inverse_linkfun_rtmb <- function(eta, link) {
 ## Translated from log_inverse_linkfun(), glmmTMB.cpp:234-249.
 ## Negative-binomial likelihoods use log(mu) for robust density evaluation.
 log_inverse_linkfun_rtmb <- function(eta, link) {
+  link_name <- link_name_rtmb(link)
   switch(
-    names(link),
+    link_name,
     log = eta,
     logit = -RTMB::logspace_add(0, -eta),
     {
       mu <- switch(
-        names(link),
+        link_name,
         probit = RTMB::pnorm(eta),
         cloglog = 1 - exp(-exp(eta)),
         identity = eta,
         sqrt = eta * eta,
         inverse = 1 / eta,
         lambertW = exp(eta) * exp(exp(eta)),
-        stop("link not yet implemented for log inverse-link: ", names(link))
+        stop("link not yet implemented for log inverse-link: ", link_name)
       )
       log(mu)
     }
@@ -965,15 +967,16 @@ dtruncated_poisson_rtmb <- function(x, lambda, log = FALSE) {
 }
 
 apply_zi_prediction <- function(mu, eta, etazi, ziPredictCode) {
-  if (ziPredictCode == .valid_zipredictcode[["corrected"]]) {
+  zi_predict_name <- zipredict_name_rtmb(ziPredictCode)
+  if (zi_predict_name == "corrected") {
     pz <- 1 / (1 + exp(-etazi))
     mu <- mu * (1 - pz)
-  } else if (ziPredictCode == .valid_zipredictcode[["uncorrected"]]) {
+  } else if (zi_predict_name == "uncorrected") {
     ## leave mu and eta unchanged
-  } else if (ziPredictCode == .valid_zipredictcode[["prob"]]) {
+  } else if (zi_predict_name == "prob") {
     mu <- 1 / (1 + exp(-etazi))
     eta <- etazi
-  } else if (ziPredictCode == .valid_zipredictcode[["disp"]]) {
+  } else if (zi_predict_name == "disp") {
     ## handled separately by caller
   } else {
     stop("Invalid ziPredictCode: ", ziPredictCode)
@@ -983,8 +986,9 @@ apply_zi_prediction <- function(mu, eta, etazi, ziPredictCode) {
 }
 
 linkfun_rtmb <- function(mu, link) {
+  link_name <- link_name_rtmb(link)
   switch(
-    names(link),
+    link_name,
     log = log(mu),
     identity = mu,
     sqrt = sqrt(mu),
@@ -993,11 +997,14 @@ linkfun_rtmb <- function(mu, link) {
     cloglog = log(-log1p(-mu)),
     inverse = 1 / mu,
     lambertW = stop("linkfun for lambertW not yet implemented"),
-    stop("link not yet implemented for prediction aggregation: ", names(link))
+    stop("link not yet implemented for prediction aggregation: ", link_name)
   )
 }
 
 family_name_rtmb <- function(family) {
+  if (is.character(family) && length(family) == 1L) {
+    return(family)
+  }
   if (is.list(family) && !is.null(family$family)) {
     return(family$family)
   }
@@ -1007,6 +1014,32 @@ family_name_rtmb <- function(family) {
     family_name <- names(.valid_family)[match(family, .valid_family)]
   }
   family_name
+}
+
+link_name_rtmb <- function(link) {
+  if (is.character(link) && length(link) == 1L) {
+    return(link)
+  }
+
+  link_name <- names(link)
+  if (length(link_name) == 0L) {
+    link_name <- names(.valid_link)[match(link, .valid_link)]
+  }
+  link_name
+}
+
+zipredict_name_rtmb <- function(ziPredictCode) {
+  if (is.character(ziPredictCode) && length(ziPredictCode) == 1L) {
+    return(ziPredictCode)
+  }
+
+  zi_predict_name <- names(ziPredictCode)
+  if (length(zi_predict_name) == 0L) {
+    zi_predict_name <- names(.valid_zipredictcode)[
+      match(ziPredictCode, .valid_zipredictcode)
+    ]
+  }
+  zi_predict_name
 }
 
 dcauchy_rtmb <- function(x, location, scale, log = FALSE) {
@@ -1050,21 +1083,37 @@ dlkj_rtmb <- function(x, eta, log = FALSE) {
 }
 
 prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
-                      prior_distrib, prior_whichpar, prior_elstart,
-                      prior_elend, prior_npar, prior_params) {
+                      prior_distrib, prior_whichpar, prior_distrib_name,
+                      prior_whichpar_name, prior_elstart, prior_elend,
+                      prior_npar, prior_params) {
   nll <- 0
   par_ind <- 1L
 
+  if (length(prior_distrib_name) == 0L && length(prior_distrib) > 0L) {
+    prior_distrib_name <- names(.valid_prior)[
+      match(prior_distrib, .valid_prior)
+    ]
+  } else {
+    prior_distrib_name <- as.character(prior_distrib_name)
+  }
+  if (length(prior_whichpar_name) == 0L && length(prior_whichpar) > 0L) {
+    prior_whichpar_name <- names(.valid_vprior)[
+      match(prior_whichpar, .valid_vprior)
+    ]
+  } else {
+    prior_whichpar_name <- as.character(prior_whichpar_name)
+  }
+
   for (i in seq_along(prior_distrib)) {
     parvec <- switch(
-      as.character(prior_whichpar[i]),
-      "0" = beta,
-      "1" = betazi,
-      "2" = betadisp,
-      "10" = theta,
-      "20" = thetazi,
-      "30" = psi,
-      stop("Unknown prior parameter vector code: ", prior_whichpar[i])
+      prior_whichpar_name[i],
+      beta = beta,
+      betazi = betazi,
+      betadisp = betadisp,
+      theta = theta,
+      thetazi = thetazi,
+      psi = psi,
+      stop("Unknown prior parameter vector name: ", prior_whichpar_name[i])
     )
 
     par_start <- prior_elstart[i] + 1L
@@ -1081,7 +1130,7 @@ prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
       )
     }
 
-    if (prior_distrib[i] == .valid_prior[["lkj"]]) {
+    if (prior_distrib_name[i] == "lkj") {
       corpars <- parvec[par_start:par_end]
       nll <- nll - dlkj_rtmb(
         corpars,
@@ -1092,33 +1141,33 @@ prior_nll <- function(beta, betazi, betadisp, theta, thetazi, psi,
       for (j in par_start:par_end) {
         parval <- parvec[j]
         logpriorval <- switch(
-          as.character(prior_distrib[i]),
-          "0" = RTMB::dnorm(
+          prior_distrib_name[i],
+          normal = RTMB::dnorm(
             parval,
             mean = prior_params[par_ind],
             sd = prior_params[par_ind + 1L],
             log = TRUE
           ),
-          "1" = {
+          t = {
             location <- prior_params[par_ind]
             scale <- prior_params[par_ind + 1L]
             df <- prior_params[par_ind + 2L]
             RTMB::dt((parval - location) / scale, df = df, log = TRUE) -
               log(scale)
           },
-          "2" = dcauchy_rtmb(
+          cauchy = dcauchy_rtmb(
             parval,
             location = prior_params[par_ind],
             scale = prior_params[par_ind + 1L],
             log = TRUE
           ),
-          "10" = {
+          gamma = {
             shape <- prior_params[par_ind + 1L]
             scale <- prior_params[par_ind] / prior_params[par_ind + 1L]
             RTMB::dgamma(exp(parval), shape = shape, scale = scale,
                          log = TRUE)
           },
-          stop("Prior distribution not implemented: ", prior_distrib[i])
+          stop("Prior distribution not implemented: ", prior_distrib_name[i])
         )
         nll <- nll - logpriorval
       }
@@ -1144,7 +1193,9 @@ utils::globalVariables(c(
 
 rtmb_tpl <- function(parameters, data) {
   RTMB::getAll(data, parameters)
-  family_name <- family_name_rtmb(family)
+  family_name <- data$family_name %||% family_name_rtmb(family)
+  link_name <- data$link_name %||% link_name_rtmb(link)
+  zi_predict_name <- zipredict_name_rtmb(ziPredictCode)
   ## Keep the original response for NA and structural-zero checks; OBS() may
   ## replace yobs with a simulation or OSA reference. During OSA calculations
   ## yobs is moved from data into parameters, so data$yobs may be absent.
@@ -1170,7 +1221,7 @@ rtmb_tpl <- function(parameters, data) {
   eta <- as.vector(eta)
 
   mu <- switch(
-    names(link),
+    link_name,
     log = exp(eta),
     identity = eta,
     sqrt = eta * eta,
@@ -1179,7 +1230,7 @@ rtmb_tpl <- function(parameters, data) {
     cloglog = 1 - exp(-exp(eta)),
     inverse = 1 / eta,
     lambertW = exp(eta) * exp(exp(eta)),
-    stop("link not yet implemented: ", names(link))
+    stop("link not yet implemented: ", link_name)
   )
 
   ## Zero-inflation linear predictor; adapted from
@@ -1209,8 +1260,8 @@ rtmb_tpl <- function(parameters, data) {
   yobs_i <- yobs[i]
   keep <- osa_keep(yobs_i)
   eta_zi <- if (has_zi) etazi[i] else NULL
-  logit_mu <- function() logit_mu_rtmb(eta, link)
-  log_mu <- function() log_mu_rtmb(eta, link)
+  logit_mu <- function() logit_mu_rtmb(eta, link_name)
+  log_mu <- function() log_mu_rtmb(eta, link_name)
   log_var_minus_mu <- function() {
     log_var_minus_mu_rtmb(family_name, log_mu(), etadisp, psi)
   }
@@ -1346,6 +1397,8 @@ rtmb_tpl <- function(parameters, data) {
     psi = psi,
     prior_distrib = prior_distrib,
     prior_whichpar = prior_whichpar,
+    prior_distrib_name = data$rtmb_prior_distrib_name %||% character(0),
+    prior_whichpar_name = data$rtmb_prior_whichpar_name %||% character(0),
     prior_elstart = prior_elstart,
     prior_elend = prior_elend,
     prior_npar = prior_npar,
@@ -1396,18 +1449,18 @@ rtmb_tpl <- function(parameters, data) {
     mu_pred_all <- mu_pred_all / exp(log_nzprob_pred)
   }
 
-  if (has_zi || ziPredictCode == .valid_zipredictcode[["prob"]]) {
+  if (has_zi || zi_predict_name == "prob") {
     zi_pred <- apply_zi_prediction(
       mu = mu_pred_all,
       eta = eta_pred_all,
       etazi = etazi,
-      ziPredictCode = ziPredictCode
+      ziPredictCode = zi_predict_name
     )
     mu_pred_all <- zi_pred$mu
     eta_pred_all <- zi_pred$eta
   }
 
-  if (ziPredictCode == .valid_zipredictcode[["disp"]]) {
+  if (zi_predict_name == "disp") {
     mu_pred_all <- if (family_name == "Gamma") 1 / sqrt(phi) else phi
     eta_pred_all <- etadisp
   }
@@ -1432,7 +1485,7 @@ rtmb_tpl <- function(parameters, data) {
     }
 
     mu_predict <- tmp
-    eta_predict <- linkfun_rtmb(mu_predict, link)
+    eta_predict <- linkfun_rtmb(mu_predict, link_name)
   }
 
   corr <- cond_re$corr
@@ -1607,9 +1660,7 @@ termwise_nll <- function(U, theta, term) {
   "[<-" <- RTMB::ADoverload("[<-")
 
   block_code <- term$blockCode
-  name <- if (is.character(block_code) && length(block_code) == 1L) {
-    block_code
-  } else {
+  name <- term$blockName %||% {
     block_name <- names(block_code)
     if (length(block_name) == 0L) {
       names(.valid_covstruct)[match(block_code, .valid_covstruct)]

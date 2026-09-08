@@ -427,6 +427,8 @@ mkTMBStruc <- function(formula, ziformula, dispformula,
     termsdisp = dispReStruc,
     family = .valid_family[family$family],
     link = .valid_link[family$link],
+    family_name = family$family,
+    link_name = family$link,
     ## combinomial: 0 = log link on dispersion (default, nu > 0),
     ##               1 = identity link (allows nu in R, U-shape regime)
     combinom_disp_link = if (family$family == "combinomial" &&
@@ -1065,6 +1067,7 @@ getReStruc <- function(reTrms, ss=NULL, aa=NULL, reXterms=NULL, fr=NULL, full_co
                     blockSize = blksize[i],
                     blockNumTheta = blockNumTheta[[i]],
                     blockCode = covCode[i],
+                    blockName = ss[i],
                     simCode = simCode[i],
                     fullCor = as.integer(full_cor[i])
                     )
