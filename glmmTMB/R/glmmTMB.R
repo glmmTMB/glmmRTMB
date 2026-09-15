@@ -361,6 +361,31 @@ mkTMBStruc <- function(formula, ziformula, dispformula,
     }
   }
 
+  ## ordinal family: response is an ordered factor (or 1-based integer
+  ## codes); convert to numeric category codes 1..K for the TMB side and
+  ## keep the level labels for prediction/simulation
+  ord_levels <- NULL
+  if (family$family == "ordinal") {
+    if (is.factor(yobs)) {
+      ord_levels <- levels(yobs)
+      yobs <- as.numeric(yobs)
+      attr(ord_levels, "factor_response") <- TRUE
+    } else {
+      ord_levels <- as.character(seq_len(max(yobs, na.rm = TRUE)))
+      attr(ord_levels, "factor_response") <- FALSE
+      if (length(whichPredict) == 0) {
+        warning("ordinal response given as integer codes: the number of ",
+                "categories is inferred as max(response) = ",
+                length(ord_levels), "; use an ordered factor to declare ",
+                "the levels explicitly (e.g. if the top category is ",
+                "unobserved in these data)")
+      }
+    }
+    if (length(ord_levels) < 2) {
+      stop("ordinal response must have at least two levels")
+    }
+  }
+
 
   denseXval <- function(component,lst) if (sparseX[[component]]) matrix(nrow=0,ncol=0) else lst$X
   ## need a 'dgTMatrix' (double, general, Triplet representation)
@@ -460,9 +485,16 @@ mkTMBStruc <- function(formula, ziformula, dispformula,
 
   ## Extra family specific parameters
 
-  psiLength <- find_psi(family$family)
-           
-  psi_init <- if (family$family == "ordbeta") c(-1, 1) else rr0(psiLength)
+  if (family$family == "ordinal") {
+      ## K-1 increasing thresholds via a softmax parameterization:
+      ## psi are log-weights of the K baseline category probabilities
+      ## (last fixed to 0) and theta = qlogis(cumsum(softmax(c(psi, 0)))).
+      ## psi = 0 starts from equiprobable categories (cf. ordinal::clm)
+      psi_init <- rr0(length(ord_levels) - 1L)
+  } else {
+      psiLength <- find_psi(family$family)
+      psi_init <- if (family$family == "ordbeta") c(-1, 1) else rr0(psiLength)
+  }
 
   # theta is 0, 1 for rr_covstruct
   # theta is parameterised to corr matrix for propto
@@ -509,6 +541,19 @@ mkTMBStruc <- function(formula, ziformula, dispformula,
                        psi  = psi_init
                      ))
 
+  ## ordinal family: a fixed-effect intercept is redundant with the
+  ## thresholds; fix it to zero (it is absorbed into the thresholds)
+  if (family$family == "ordinal") {
+      Xnames <- colnames(if (sparseX[["cond"]]) data.tmb$XS else data.tmb$X)
+      icpt <- which(Xnames == "(Intercept)")
+      if (length(icpt) == 1L && is.null(mapArg$beta)) {
+          betamap <- seq_along(parameters$beta)
+          betamap[icpt] <- NA
+          mapArg <- c(mapArg, list(beta = factor(betamap)))
+          parameters$beta[icpt] <- 0
+      }
+  }
+
   if(!is.null(start) || !is.null(control$start_method$method)){
     parameters <- startParams(parameters,
                               formula, ziformula, dispformula,
@@ -543,9 +588,9 @@ mkTMBStruc <- function(formula, ziformula, dispformula,
   if (REML) randomArg <- c(randomArg, "beta")
   dispformula <- dispformula.orig ## May have changed - restore
   return(namedList(data.tmb, parameters, mapArg, randomArg, grpVar,
-            condList, ziList, dispList, 
+            condList, ziList, dispList,
   					condReStruc, ziReStruc, dispReStruc,
-            family, contrasts, respCol,
+            family, contrasts, respCol, ord_levels,
             allForm=namedList(combForm,formula,ziformula,dispformula),
             fr, se, call, verbose, REML, map, sparseX, priors))
 }
@@ -1096,9 +1141,12 @@ getReStruc <- function(reTrms, ss=NULL, aa=NULL, reXterms=NULL, fr=NULL, full_co
     return(ans)
 }
 
-.noDispersionFamilies <- c("binomial", "poisson", "truncated_poisson", "bell")
+.noDispersionFamilies <- c("binomial", "poisson", "truncated_poisson", "bell", "ordinal")
 
 ## number of additional/shape parameters (default = 0)
+## NOTE: the ordinal family is not registered here because its psi length
+## is data-dependent (n. of response levels - 1); it is handled separately
+## in mkTMBStruc()
 .extraParamFamilies <- list('1' = c('t', 'tweedie', 'nbinom12', 'skewnormal'),
                             '2' = 'ordbeta')
 find_psi <- function(f) {
@@ -1314,6 +1362,18 @@ glmmTMB <- function(
     }
     if (grepl("^quasi", family$family))
         stop('"quasi" families cannot be used in glmmTMB')
+
+    if (family$family == "ordinal" && ziformula != ~0) {
+        stop("zero-inflation is not implemented for the ordinal family")
+    }
+
+    if (family$family == "ordinal" && REML) {
+        ## REML integrates out 'beta' only; the thresholds (psi) are treated
+        ## as fixed even though they play a role analogous to an intercept,
+        ## so the correct REML definition for this family is unsettled
+        warning("REML for the ordinal family integrates out the fixed effects ",
+                "but not the thresholds; treat the result with caution")
+    }
 
     if (inForm(formula, quote(`$`))) {
         warning("use of the ", sQuote("$"), " operator in formulas is not recommended")
@@ -2125,6 +2185,7 @@ finalizeTMB <- function(TMBStruc, obj, fit, h = NULL, data.tmb.old = NULL) {
                                                     disp=dispList),
                                                "[[", "terms"),
                                 reStruc = namedList(condReStruc, ziReStruc, dispReStruc),
+                                ord_levels,
                                 allForm,
                                 REML,
                                 map,
@@ -2210,11 +2271,20 @@ ngrps.factor <- function(object, ...) nlevels(object)
 ##' @title summary for glmmTMB fits
 ##' @param object a fitted \code{glmmTMB} object
 ##' @param ddf denominator degrees-of-freedom calculation. Default "asymptotic" gives standard Z-statistics
-##' (i.e., 'infinite' denominator df); \code{"kenward-roger"} uses the Kenward-Roger approximation, which will
-##' be ignored for non-REML fits and is entirely untested for GLMMs (see \code{\link{dof_KR}});
-##' \code{"satterthwaite"} uses a Satterthwaite approximation
+##' (i.e., 'infinite' denominator df); \code{"kenward-roger"} uses the Kenward-Roger approximation
+##' (see \code{\link{dof_KR}}), which requires a REML fit (an error is thrown otherwise) and a family
+##' with an estimated dispersion parameter (an error is thrown for families such as \code{binomial} or
+##' \code{poisson} that lack one); \code{"satterthwaite"} uses a Satterthwaite approximation, with no such
+##' restrictions. For families other than \code{gaussian}, both approximations are allowed but emit a
+##' warning, because their performance (and theoretical justification) for GLMMs is poorly understood
 ##' @param ... unused, for method compatibility
 ##' @inheritParams vcov.glmmTMB
+##' @details For the \code{ordinal} family, the returned object has a
+##' \code{thresholds} element (a matrix of threshold estimates, delta-method
+##' standard errors, and z values), printed as \dQuote{Threshold coefficients};
+##' the thresholds are estimated internally via a softmax parameterization, so
+##' the corresponding rows of \code{vcov(., full = TRUE)} are not on the
+##' threshold scale
 ##' @export
 summary.glmmTMB <- function(object, sandwich = FALSE, ddf=c("asymptotic", "kenward-roger", "satterthwaite"), cluster = getGroups(object), ...) {
     check_dots(...)
@@ -2224,19 +2294,8 @@ summary.glmmTMB <- function(object, sandwich = FALSE, ddf=c("asymptotic", "kenwa
 
     famL <- family(object)
 
-    if (ddf == "KR") {
-        if (!isREML(object)) {
-            warning("ddf='KR' ignored for non-REML fits")
-        } else {
-            if (family(object)$family != "gaussian") {
-                warning("ddf='KR' is untested for GLMMs. Use at your own risk!")
-            }
-            if (!trivialDisp(object) || !noZI(object)) {
-                message("ddf='KR' ignored except for conditional-distribution parameters")
-            }
-        }
-    }
-    
+    check_ddf(object, ddf)
+
     mkCoeftab <- function(coefs, vcovs, type) {
         p <- length(coefs)
         coefs <- cbind("Estimate" = coefs,
@@ -2252,7 +2311,9 @@ summary.glmmTMB <- function(object, sandwich = FALSE, ddf=c("asymptotic", "kenwa
                 labs <- c(stat_lab, pval_lab)
                 cc <- cbind(stat, pvals)
             } else {
-                if (ddf == "kenward-roger") {
+                if (!hasRandom(object)) {
+                    df_val <- rep(stats::df.residual(object), p)
+                } else if (ddf == "kenward-roger") {
                     df_val <- c(dof_KR(object))
                 } else if (ddf == "satterthwaite") {
                     df_val <- c(dof_satt(object))
@@ -2280,6 +2341,29 @@ summary.glmmTMB <- function(object, sandwich = FALSE, ddf=c("asymptotic", "kenwa
         }
     }
 
+    ## ordinal family: drop the internally-mapped intercept (fixed to 0,
+    ## absorbed into the thresholds) from the coefficient table; keep it
+    ## if the user supplied their own beta map
+    if (famL$family == "ordinal" && is.null(object$modelInfo$map$beta) &&
+        !is.null(coefs$cond)) {
+        bmap <- object$obj$env$map$beta
+        icpt <- which(rownames(coefs$cond) == "(Intercept)")
+        if (length(icpt) == 1 && !is.null(bmap) && is.na(bmap[icpt])) {
+            coefs$cond <- coefs$cond[-icpt, , drop = FALSE]
+        }
+    }
+
+    ## ordinal family: thresholds with delta-method SEs (GH #1323). Kept
+    ## separate from 'coefficients' so downstream code iterating over
+    ## cond/zi/disp tables is unaffected. Sandwich vcov is not used here
+    thresholds <- NULL
+    if (famL$family == "ordinal") {
+        thresholds <- ordinal_thresholds(object)
+        thresholds <- cbind(thresholds,
+                            "z value" = thresholds[, "Estimate"] /
+                                thresholds[, "Std. Error"])
+    }
+
     llAIC <- llikAIC(object)
 
     ## FIXME: You can't count on object@re@flist,
@@ -2291,6 +2375,7 @@ summary.glmmTMB <- function(object, sandwich = FALSE, ddf=c("asymptotic", "kenwa
 		   ngrps = ngrps(object),
                    nobs = nobs(object),
 		   coefficients = coefs,
+                   thresholds = thresholds,
                    sigma = sig,
 		   vcov = vv, # No need to potentially recompute here anything.
 		   varcor = varcor, # and use formatVC(.) for printing.
@@ -2344,6 +2429,11 @@ print.summary.glmmTMB <- function(x, digits = max(3, getOption("digits") - 3),
             printCoefmat(cc, zap.ind = 3, #, tst.ind = 4
                          digits = digits, signif.stars = signif.stars)
         } ## if (p>0)
+    }
+    if (!is.null(x$thresholds)) {
+        cat("\nThreshold coefficients:\n")
+        printCoefmat(x$thresholds, digits = digits, has.Pvalue = FALSE,
+                     signif.stars = FALSE)
     }
     if (!is.null(x$priors)) {
         cat("\nPriors:\n")

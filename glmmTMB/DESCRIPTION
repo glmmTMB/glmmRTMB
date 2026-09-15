@@ -74,6 +74,7 @@ Suggests:
     testthat,
     withr,
     MASS,
+    ordinal,
     lattice,
     ggplot2 (>= 2.2.1),
     mlmRev,
@@ -113,4 +114,4 @@ LazyData: TRUE
 BugReports: https://github.com/glmmTMB/glmmTMB/issues
 NeedsCompilation: yes
 Encoding: UTF-8
-Config/roxygen2/version: 8.0.0
+Config/roxygen2/version: 8.1.0
